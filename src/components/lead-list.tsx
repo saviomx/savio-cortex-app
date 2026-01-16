@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
-import { Search, AlertTriangle, Bot, User } from 'lucide-react';
+import { Search, AlertTriangle, Bot, User, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import type { LeadCategory, ConversationSearchItem } from '@/types/cortex';
+import type { LeadStatus } from '@/components/lead-sidebar';
+import type { ConversationSearchItem } from '@/types/cortex';
 
 interface Lead extends ConversationSearchItem {
   displayName: string;
@@ -16,7 +18,9 @@ interface Lead extends ConversationSearchItem {
 }
 
 interface LeadListProps {
-  selectedCategory: LeadCategory;
+  selectedCategory: LeadStatus;
+  dateFrom?: string | null;
+  dateTo?: string | null;
   selectedLeadId: string | null;
   onSelectLead: (lead: Lead) => void;
   className?: string;
@@ -27,62 +31,87 @@ export interface LeadListRef {
 }
 
 export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList(
-  { selectedCategory, selectedLeadId, onSelectLead, className },
+  { selectedCategory, dateFrom, dateTo, selectedLeadId, onSelectLead, className },
   ref
 ) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (cursor?: string | null, append = false) => {
     try {
-      setLoading(true);
+      if (!append) setLoading(true);
+      else setLoadingMore(true);
+
       const params = new URLSearchParams({
-        category: selectedCategory,
-        limit: '50',
+        lead_status: selectedCategory,
+        limit: '30',
       });
 
       if (searchQuery) {
         params.set('q', searchQuery);
+      }
+      if (dateFrom) {
+        params.set('date_from', dateFrom);
+      }
+      if (dateTo) {
+        params.set('date_to', dateTo);
+      }
+      if (cursor) {
+        params.set('cursor', cursor);
       }
 
       const response = await fetch(`/api/leads?${params.toString()}`);
 
       if (response.ok) {
         const data = await response.json();
-        setLeads(data.data || []);
+        if (append) {
+          setLeads(prev => [...prev, ...(data.data || [])]);
+        } else {
+          setLeads(data.data || []);
+        }
         setTotalCount(data.total_count || 0);
+        setHasMore(data.has_more || false);
+        setNextCursor(data.next_cursor || null);
       }
     } catch (error) {
       console.error('Error fetching leads:', error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchLeads();
 
     // Auto-refresh every 10 seconds
-    const interval = setInterval(fetchLeads, 10000);
+    const interval = setInterval(() => fetchLeads(), 10000);
     return () => clearInterval(interval);
   }, [fetchLeads]);
 
   useImperativeHandle(ref, () => ({
-    refresh: fetchLeads,
+    refresh: () => fetchLeads(),
   }));
 
-  const getCategoryLabel = (category: LeadCategory): string => {
-    const labels: Record<LeadCategory, string> = {
+  const handleLoadMore = () => {
+    if (nextCursor && !loadingMore) {
+      fetchLeads(nextCursor, true);
+    }
+  };
+
+  const getCategoryLabel = (category: LeadStatus): string => {
+    const labels: Record<LeadStatus, string> = {
       all: 'All Leads',
-      new_lead: 'New Lead',
+      new_leads: 'New Leads',
       conversing: 'Conversing',
       qualified: 'Qualified',
-      demo_scheduled: 'Demo Scheduled',
-      demo_today: 'Demo Today',
-      needs_human: 'Needs Human',
-      closed_crm: 'Closed / CRM',
+      demo: 'Demo Scheduled',
+      need_human: 'Needs Human',
     };
     return labels[category] || 'Leads';
   };
@@ -199,9 +228,9 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
                         {lead.has_meeting && (
                           <Badge
                             variant="default"
-                            className="text-xs bg-green-100 text-green-700 hover:bg-green-100"
+                            className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-100"
                           >
-                            Demo Today
+                            Demo Scheduled
                           </Badge>
                         )}
                       </div>
@@ -215,6 +244,28 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
                 </button>
               );
             })}
+
+            {/* Load More Button */}
+            {hasMore && (
+              <div className="p-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    `Load More (${leads.length} of ${totalCount})`
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>

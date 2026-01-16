@@ -118,6 +118,7 @@ class CortexClient {
     has_meeting?: boolean;
     state?: number;
     deal_stage?: string;
+    lead_status?: string;
     date_from?: string;
     date_to?: string;
     cursor?: string;
@@ -130,6 +131,7 @@ class CortexClient {
     if (params.has_meeting !== undefined) searchParams.set('has_meeting', String(params.has_meeting));
     if (params.state !== undefined) searchParams.set('state', String(params.state));
     if (params.deal_stage) searchParams.set('deal_stage', params.deal_stage);
+    if (params.lead_status) searchParams.set('lead_status', params.lead_status);
     if (params.date_from) searchParams.set('date_from', params.date_from);
     if (params.date_to) searchParams.set('date_to', params.date_to);
     if (params.cursor) searchParams.set('cursor', params.cursor);
@@ -273,6 +275,13 @@ class CortexClient {
 
   async getHubSpotOwners(): Promise<HubSpotOwnersResponse> {
     return this.request('/crm/owners');
+  }
+
+  async getHubSpotContact(phone: string): Promise<{
+    contact: { id: string; email?: string; firstname?: string; lastname?: string; phone?: string; company?: string } | null;
+    has_contact: boolean;
+  }> {
+    return this.request(`/crm/contact?phone=${encodeURIComponent(phone)}`);
   }
 
   async getAssignedOwner(params: {

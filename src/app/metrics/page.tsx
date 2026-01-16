@@ -10,8 +10,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, TrendingUp, TrendingDown, Users, MessageSquare, Clock, Target, Zap } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar, Users, MessageSquare, Clock, Target, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  Cell,
+} from 'recharts';
 import type {
   FunnelMetricsResponse,
   ConversionRatesResponse,
@@ -61,14 +75,16 @@ function getDateRange(range: DateRange): { startDate: string; endDate: string } 
   };
 }
 
-export default function FunnelPage() {
+export default function MetricsPage() {
   const [dateRange, setDateRange] = useState<DateRange>('30d');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
 
   useEffect(() => {
     const fetchMetrics = async () => {
       setLoading(true);
+      setError(null);
       try {
         const { startDate, endDate } = getDateRange(dateRange);
         const response = await fetch(
@@ -77,9 +93,12 @@ export default function FunnelPage() {
         if (response.ok) {
           const data = await response.json();
           setMetrics(data);
+        } else {
+          setError('Failed to load metrics');
         }
       } catch (error) {
         console.error('Error fetching metrics:', error);
+        setError('Failed to connect to metrics API');
       } finally {
         setLoading(false);
       }
@@ -122,16 +141,25 @@ export default function FunnelPage() {
     return `${(seconds / 60).toFixed(1)}m`;
   }, [metrics]);
 
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!metrics?.conversionsDaily?.data) return [];
+    return metrics.conversionsDaily.data.map(d => ({
+      ...d,
+      date: new Date(d.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    }));
+  }, [metrics]);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
-      <Header activeTab="funnel" />
+      <Header activeTab="metrics" />
 
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Page Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Funnel Analytics</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Metrics Dashboard</h1>
               <p className="text-gray-500">Track conversion performance and messaging metrics</p>
             </div>
 
@@ -151,6 +179,13 @@ export default function FunnelPage() {
             </div>
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+              {error}
+            </div>
+          )}
+
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <MetricCard
@@ -160,7 +195,7 @@ export default function FunnelPage() {
               loading={loading}
             />
             <MetricCard
-              title="Valid Conversations"
+              title="Multi-message"
               value={metrics?.conversionSummary?.conversations_multi_msg}
               subtitle={`${((metrics?.conversionSummary?.conversations_multi_msg || 0) / Math.max(metrics?.conversionSummary?.total_conversations || 1, 1) * 100).toFixed(1)}% of total`}
               icon={MessageSquare}
@@ -260,90 +295,191 @@ export default function FunnelPage() {
             </div>
           </div>
 
+          {/* Charts with Tabs */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <Tabs defaultValue="conversations" className="w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">Daily Trends</h2>
+                <TabsList>
+                  <TabsTrigger value="conversations">Conversations</TabsTrigger>
+                  <TabsTrigger value="demos">Demos</TabsTrigger>
+                  <TabsTrigger value="conversion">Conversion Rate</TabsTrigger>
+                </TabsList>
+              </div>
+
+              {loading ? (
+                <Skeleton className="h-80" />
+              ) : chartData.length > 0 ? (
+                <>
+                  <TabsContent value="conversations" className="mt-0">
+                    <ResponsiveContainer width="100%" height={320}>
+                      <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#94a3b8" stopOpacity={0.1}/>
+                          </linearGradient>
+                          <linearGradient id="colorValid" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                        <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}
+                          labelStyle={{ color: '#fff' }}
+                          itemStyle={{ color: '#fff' }}
+                        />
+                        <Legend />
+                        <Area
+                          type="monotone"
+                          dataKey="total_conversations"
+                          name="Total Conversations"
+                          stroke="#94a3b8"
+                          fillOpacity={1}
+                          fill="url(#colorTotal)"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="conversations_multi_msg"
+                          name="Multi-message"
+                          stroke="#3b82f6"
+                          fillOpacity={1}
+                          fill="url(#colorValid)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </TabsContent>
+
+                  <TabsContent value="demos" className="mt-0">
+                    <ResponsiveContainer width="100%" height={320}>
+                      <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorDemos" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                        <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}
+                          labelStyle={{ color: '#fff' }}
+                          itemStyle={{ color: '#fff' }}
+                        />
+                        <Legend />
+                        <Area
+                          type="monotone"
+                          dataKey="conversations_with_demo"
+                          name="Demos Booked"
+                          stroke="#22c55e"
+                          fillOpacity={1}
+                          fill="url(#colorDemos)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </TabsContent>
+
+                  <TabsContent value="conversion" className="mt-0">
+                    <ResponsiveContainer width="100%" height={320}>
+                      <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                        <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" unit="%" />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}
+                          labelStyle={{ color: '#fff' }}
+                          itemStyle={{ color: '#fff' }}
+                          formatter={(value) => [`${(value as number).toFixed(1)}%`, 'Conversion Rate']}
+                        />
+                        <Legend />
+                        <Area
+                          type="monotone"
+                          dataKey="conversion_rate_percentage"
+                          name="Conversion Rate"
+                          stroke="#a855f7"
+                          fillOpacity={1}
+                          fill="url(#colorRate)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </TabsContent>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-80 text-gray-500">
+                  No data available
+                </div>
+              )}
+            </Tabs>
+          </div>
+
           {/* Funnel Breakdown */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Funnel Breakdown</h2>
 
-            <div className="space-y-3">
-              <FunnelRow
-                label="Total Conversations"
-                value={funnelTotals?.totalConversations}
-                maxValue={funnelTotals?.totalConversations || 1}
-                loading={loading}
-                color="bg-gray-400"
-              />
-              <FunnelRow
-                label="Valid Conversations (>1 msg)"
-                value={funnelTotals?.conversationsMultiMsg}
-                maxValue={funnelTotals?.totalConversations || 1}
-                percentage={
-                  funnelTotals
-                    ? (funnelTotals.conversationsMultiMsg / funnelTotals.totalConversations) * 100
-                    : 0
-                }
-                loading={loading}
-                color="bg-blue-500"
-              />
-              <FunnelRow
-                label="In Qualification"
-                value={funnelTotals?.inQualification}
-                maxValue={funnelTotals?.totalConversations || 1}
-                percentage={
-                  funnelTotals
-                    ? (funnelTotals.inQualification / funnelTotals.conversationsMultiMsg) * 100
-                    : 0
-                }
-                loading={loading}
-                color="bg-yellow-500"
-              />
-              <FunnelRow
-                label="Qualified Leads"
-                value={funnelTotals?.qualifiedLeads}
-                maxValue={funnelTotals?.totalConversations || 1}
-                percentage={
-                  funnelTotals
-                    ? (funnelTotals.qualifiedLeads / funnelTotals.inQualification) * 100
-                    : 0
-                }
-                loading={loading}
-                color="bg-orange-500"
-              />
-              <FunnelRow
-                label="Scheduling Intent"
-                value={funnelTotals?.schedulingIntent}
-                maxValue={funnelTotals?.totalConversations || 1}
-                percentage={
-                  funnelTotals
-                    ? (funnelTotals.schedulingIntent / funnelTotals.qualifiedLeads) * 100
-                    : 0
-                }
-                loading={loading}
-                color="bg-purple-500"
-              />
-              <FunnelRow
-                label="Demos Booked"
-                value={funnelTotals?.conversationsWithDemo}
-                maxValue={funnelTotals?.totalConversations || 1}
-                percentage={
-                  funnelTotals
-                    ? (funnelTotals.conversationsWithDemo / funnelTotals.schedulingIntent) * 100
-                    : 0
-                }
-                loading={loading}
-                color="bg-green-500"
-              />
-            </div>
-          </div>
-
-          {/* Daily Trend */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Daily Conversations</h2>
             {loading ? (
-              <Skeleton className="h-48" />
-            ) : metrics?.conversationsCount?.data && metrics.conversationsCount.data.length > 0 ? (
-              <DailyChart data={metrics.conversationsCount.data} />
+              <Skeleton className="h-80" />
+            ) : funnelTotals ? (
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart
+                  data={[
+                    { name: 'Total Conversations', value: funnelTotals.totalConversations, fill: '#94a3b8' },
+                    { name: 'Multi-message', value: funnelTotals.conversationsMultiMsg, fill: '#3b82f6' },
+                    { name: 'In Qualification', value: funnelTotals.inQualification, fill: '#eab308' },
+                    { name: 'Qualified Leads', value: funnelTotals.qualifiedLeads, fill: '#f97316' },
+                    { name: 'Scheduling Intent', value: funnelTotals.schedulingIntent, fill: '#a855f7' },
+                    { name: 'Demos Booked', value: funnelTotals.conversationsWithDemo, fill: '#22c55e' },
+                  ]}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 12 }}
+                    stroke="#94a3b8"
+                    width={110}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff' }}
+                    itemStyle={{ color: '#fff' }}
+                    formatter={(value, _name, props) => {
+                      const val = value as number;
+                      const total = funnelTotals.conversationsMultiMsg || 1;
+                      const percentage = props.payload.name === 'Total Conversations'
+                        ? 100
+                        : ((val / total) * 100).toFixed(1);
+                      return [`${val.toLocaleString()} (${percentage}%)`, ''];
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {[
+                      { name: 'Total Conversations', fill: '#94a3b8' },
+                      { name: 'Multi-message', fill: '#3b82f6' },
+                      { name: 'In Qualification', fill: '#eab308' },
+                      { name: 'Qualified Leads', fill: '#f97316' },
+                      { name: 'Scheduling Intent', fill: '#a855f7' },
+                      { name: 'Demos Booked', fill: '#22c55e' },
+                    ].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-48 text-gray-500">
+              <div className="flex items-center justify-center h-80 text-gray-500">
                 No data available
               </div>
             )}
@@ -426,76 +562,3 @@ function RateCard({
   );
 }
 
-function FunnelRow({
-  label,
-  value,
-  maxValue,
-  percentage,
-  loading,
-  color = 'bg-gray-900',
-}: {
-  label: string;
-  value?: number;
-  maxValue: number;
-  percentage?: number;
-  loading?: boolean;
-  color?: string;
-}) {
-  const barWidth = value ? (value / maxValue) * 100 : 0;
-
-  return (
-    <div className="flex items-center gap-4">
-      <div className="w-48 text-sm text-gray-600">{label}</div>
-      <div className="flex-1 flex items-center gap-3">
-        {loading ? (
-          <Skeleton className="h-8 flex-1" />
-        ) : (
-          <>
-            <div className="flex-1 bg-gray-100 rounded-lg h-8 relative overflow-hidden">
-              <div
-                className={cn('absolute inset-y-0 left-0 rounded-lg flex items-center pl-3', color)}
-                style={{ width: `${Math.max(barWidth, 8)}%` }}
-              >
-                <span className="text-sm font-medium text-white">
-                  {value?.toLocaleString() || 0}
-                </span>
-              </div>
-            </div>
-            {percentage !== undefined && (
-              <span className="w-16 text-sm text-gray-500 text-right">
-                {isNaN(percentage) || !isFinite(percentage) ? '0.0' : percentage.toFixed(1)}%
-              </span>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DailyChart({ data }: { data: { day: string; conversations_count: number }[] }) {
-  const maxCount = Math.max(...data.map(d => d.conversations_count), 1);
-
-  return (
-    <div className="h-48 flex items-end gap-1">
-      {data.map((item, i) => {
-        const height = (item.conversations_count / maxCount) * 100;
-        const date = new Date(item.day);
-        const dayLabel = date.toLocaleDateString('en-US', { day: 'numeric' });
-
-        return (
-          <div key={item.day} className="flex-1 flex flex-col items-center gap-1">
-            <div
-              className="w-full bg-gray-900 rounded-t transition-all hover:bg-gray-700"
-              style={{ height: `${Math.max(height, 2)}%` }}
-              title={`${item.day}: ${item.conversations_count} conversations`}
-            />
-            {(i === 0 || i === data.length - 1 || i % Math.ceil(data.length / 7) === 0) && (
-              <span className="text-xs text-gray-400">{dayLabel}</span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
