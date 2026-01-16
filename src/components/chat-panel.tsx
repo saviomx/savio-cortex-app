@@ -23,6 +23,9 @@ import {
   Mail,
   Building,
   Briefcase,
+  Bug,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
@@ -89,6 +92,7 @@ export function ChatPanel({
   const [messageInput, setMessageInput] = useState('');
   const [sending, setSending] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
   const [updatingAttendance, setUpdatingAttendance] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -419,6 +423,22 @@ export function ChatPanel({
       <div className="flex-1 flex flex-col min-h-0">
         {activeTab === 'chat' && (
           <>
+            {/* Debug Toggle */}
+            <div className="flex-shrink-0 flex items-center justify-end px-4 py-2 border-b border-gray-100">
+              <button
+                onClick={() => setDebugMode(!debugMode)}
+                className={cn(
+                  'flex items-center gap-1.5 px-2 py-1 text-xs rounded-md transition-colors',
+                  debugMode
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                )}
+              >
+                <Bug className="w-3.5 h-3.5" />
+                Debug
+              </button>
+            </div>
+
             {/* Messages */}
             <ScrollArea className="flex-1 min-h-0 p-4">
               {loading && !conversation ? (
@@ -436,7 +456,7 @@ export function ChatPanel({
               ) : (
                 <div className="space-y-4">
                   {conversation?.conversation?.map((msg: Message, index: number) => (
-                    <MessageBubble key={index} message={msg} />
+                    <MessageBubble key={index} message={msg} showDebug={debugMode} />
                   ))}
                   {/* Scroll anchor */}
                   <div ref={scrollRef} />
@@ -527,7 +547,8 @@ export function ChatPanel({
 
 // Message Bubble Component
 // Inverted: We are the chatbot (assistant), so our messages go on the right
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, showDebug }: { message: Message; showDebug?: boolean }) {
+  const [debugExpanded, setDebugExpanded] = useState(false);
   const isAssistant = message.role === 'assistant';
   const isSystem = message.role === 'system';
 
@@ -639,6 +660,57 @@ function MessageBubble({ message }: { message: Message }) {
             <p className={cn('text-sm whitespace-pre-wrap', hasMedia && 'px-3 pb-2')}>
               {displayContent}
             </p>
+          )}
+
+          {/* Debug metadata section */}
+          {showDebug && metadata && Object.keys(metadata).length > 0 && (
+            <div className={cn(
+              'border-t mt-2 pt-2',
+              isAssistant ? 'border-blue-400/30' : 'border-gray-300'
+            )}>
+              <button
+                onClick={() => setDebugExpanded(!debugExpanded)}
+                className={cn(
+                  'flex items-center gap-1 text-xs w-full px-3 py-1',
+                  isAssistant ? 'text-blue-200 hover:text-white' : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                <Bug className="w-3 h-3" />
+                <span>Metadata</span>
+                {debugExpanded ? (
+                  <ChevronUp className="w-3 h-3 ml-auto" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 ml-auto" />
+                )}
+              </button>
+              {debugExpanded && (
+                <div className="px-3 pb-2">
+                  <div className="flex justify-end mb-1">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(metadata, null, 2));
+                      }}
+                      className={cn(
+                        'text-xs px-2 py-0.5 rounded transition-colors',
+                        isAssistant
+                          ? 'text-blue-200 hover:bg-blue-500/30'
+                          : 'text-gray-500 hover:bg-gray-200'
+                      )}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className={cn(
+                    'max-h-40 overflow-y-auto overflow-x-auto rounded text-xs font-mono p-2',
+                    isAssistant ? 'bg-blue-700/50 text-blue-100' : 'bg-gray-200 text-gray-600'
+                  )}>
+                    <pre className="whitespace-pre-wrap break-all">
+                      {JSON.stringify(metadata, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
