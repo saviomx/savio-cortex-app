@@ -95,6 +95,10 @@ export interface ConversationSearchResponse {
 // Lead Categories (derived from conversation data)
 // =============================================================================
 
+// API-supported lead status values
+export type LeadStatus = 'all' | 'new_leads' | 'conversing' | 'qualified' | 'demo' | 'need_human';
+
+// Legacy lead categories (deprecated)
 export type LeadCategory =
   | 'all'
   | 'new_lead'

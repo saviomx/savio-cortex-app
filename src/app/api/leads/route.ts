@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCortexClient } from '@/lib/cortex-client';
-import type { ConversationSearchItem, LeadCategoryCounts } from '@/types/cortex';
+import type { ConversationSearchItem, LeadStatus } from '@/types/cortex';
 
 /**
  * GET /api/leads
@@ -13,70 +13,39 @@ export async function GET(request: Request) {
 
     // Search parameters
     const q = searchParams.get('q') || undefined;
-    const category = searchParams.get('category') || 'all';
+    const leadStatus = (searchParams.get('lead_status') || 'all') as LeadStatus;
     const cursor = searchParams.get('cursor') || undefined;
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? Math.min(parseInt(limitParam, 10), 100) : 50;
+    const dateFrom = searchParams.get('date_from') || undefined;
+    const dateTo = searchParams.get('date_to') || undefined;
 
-    // Build search params based on category
+    // Build search params - use lead_status directly for API filtering
     const searchPayload: {
       q?: string;
-      qualified?: boolean;
-      has_meeting?: boolean;
-      state?: number;
-      deal_stage?: string;
+      lead_status?: string;
+      date_from?: string;
+      date_to?: string;
       cursor?: string;
       limit?: number;
     } = {
       q,
       cursor,
       limit,
+      date_from: dateFrom,
+      date_to: dateTo,
     };
 
-    // Map category to API filters
-    switch (category) {
-      case 'qualified':
-        searchPayload.qualified = true;
-        break;
-      case 'demo_scheduled':
-        searchPayload.has_meeting = true;
-        break;
-      case 'demo_today':
-        searchPayload.has_meeting = true;
-        break;
-      case 'needs_human':
-        searchPayload.state = 1; // Agent paused
-        break;
-      case 'closed_crm':
-        searchPayload.deal_stage = 'closedwon';
-        break;
-      case 'new_lead':
-      case 'conversing':
-        // These require client-side filtering after fetching
-        break;
-      // 'all' - no additional filters
+    // Only add lead_status if not 'all'
+    if (leadStatus !== 'all') {
+      searchPayload.lead_status = leadStatus;
     }
 
     // Use the search API
     const response = await client.searchConversations(searchPayload);
 
-    // Apply additional client-side filtering for categories not supported by API
-    let items = response.items;
-
-    if (category === 'new_lead') {
-      // New leads: conversations with 1-2 messages, not qualified
-      items = items.filter(
-        (c: ConversationSearchItem) => c.messages_count <= 2 && !c.qualified
-      );
-    } else if (category === 'conversing') {
-      // Conversing: active conversations with more than 2 messages, not yet qualified
-      items = items.filter(
-        (c: ConversationSearchItem) => c.state === 0 && c.messages_count > 2 && !c.qualified
-      );
-    }
-
     // Transform to lead format
-    const leads = items.map((item: ConversationSearchItem) => ({
+    const leads = response.items.map((item: ConversationSearchItem) => ({
       id: item.id,
       external_id: item.external_id,
       created_at: item.created_at,
@@ -110,68 +79,6 @@ export async function GET(request: Request) {
     console.error('Error fetching leads:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to fetch leads' },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * Get lead category counts for the sidebar
- * POST /api/leads (with action: 'counts')
- */
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { action } = body;
-
-    if (action === 'counts') {
-      const client = getCortexClient();
-
-      // Fetch counts using multiple search API calls in parallel
-      const [
-        allResponse,
-        qualifiedResponse,
-        meetingResponse,
-        needsHumanResponse,
-      ] = await Promise.all([
-        client.searchConversations({ limit: 1 }), // Get total count
-        client.searchConversations({ qualified: true, limit: 1 }),
-        client.searchConversations({ has_meeting: true, limit: 1 }),
-        client.searchConversations({ state: 1, limit: 1 }),
-      ]);
-
-      // For new_lead and conversing, we need to fetch more data to filter
-      const recentResponse = await client.searchConversations({ limit: 200 });
-
-      const newLeadCount = recentResponse.items.filter(
-        (c: ConversationSearchItem) => c.messages_count <= 2 && !c.qualified
-      ).length;
-
-      const conversingCount = recentResponse.items.filter(
-        (c: ConversationSearchItem) => c.state === 0 && c.messages_count > 2 && !c.qualified
-      ).length;
-
-      const counts: LeadCategoryCounts = {
-        all: allResponse.total_count,
-        new_lead: newLeadCount,
-        conversing: conversingCount,
-        qualified: qualifiedResponse.total_count,
-        demo_scheduled: meetingResponse.total_count,
-        demo_today: Math.min(4, meetingResponse.total_count), // Estimate for demo today
-        needs_human: needsHumanResponse.total_count,
-        closed_crm: 0, // Would need deal_stage filter
-        urgent: needsHumanResponse.total_count,
-        active: allResponse.total_count - needsHumanResponse.total_count,
-      };
-
-      return NextResponse.json(counts);
-    }
-
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  } catch (error) {
-    console.error('Error in leads POST:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to process request' },
       { status: 500 }
     );
   }
