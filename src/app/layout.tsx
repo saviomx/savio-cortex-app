@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
+import { AuthProvider } from "@/contexts/auth-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WhatsApp inbox",
-  description: "A simple WhatsApp inbox built with Next.js",
+  title: "Savio - AI Sales Development",
+  description: "AI-powered sales development platform",
+  icons: {
+    icon: "/savio-logo-DdP6MEtP.png",
+    apple: "/savio-logo-DdP6MEtP.png",
+  },
 };
 
 export default function RootLayout({
@@ -14,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
