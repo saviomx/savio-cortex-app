@@ -121,6 +121,7 @@ class CortexClient {
     lead_status?: string;
     date_from?: string;
     date_to?: string;
+    window_status?: string;
     cursor?: string;
     limit?: number;
   }): Promise<ConversationSearchResponse> {
@@ -134,6 +135,7 @@ class CortexClient {
     if (params.lead_status) searchParams.set('lead_status', params.lead_status);
     if (params.date_from) searchParams.set('date_from', params.date_from);
     if (params.date_to) searchParams.set('date_to', params.date_to);
+    if (params.window_status) searchParams.set('window_status', params.window_status);
     if (params.cursor) searchParams.set('cursor', params.cursor);
     if (params.limit) searchParams.set('limit', String(params.limit));
 

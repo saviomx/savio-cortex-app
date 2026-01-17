@@ -1,18 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { cn } from '@/lib/utils';
-import { Users, MessageSquare, CheckCircle, Calendar, AlertCircle, CalendarDays, X } from 'lucide-react';
+import { Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, AlertCircle, CalendarDays, X, MessageCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 // Lead status values matching the API
 export type LeadStatus = 'all' | 'new_leads' | 'conversing' | 'qualified' | 'demo' | 'need_human';
 
+// Window status for 24h filter
+export type WindowStatus = 'all' | 'open' | 'expired';
+
 interface LeadSidebarProps {
   selectedCategory: LeadStatus;
   onCategoryChange: (category: LeadStatus) => void;
   onDateChange?: (dateFrom: string | null, dateTo: string | null) => void;
+  windowStatus?: WindowStatus;
+  onWindowStatusChange?: (status: WindowStatus) => void;
+  windowCounts?: { open: number; expired: number };
   className?: string;
 }
 
@@ -29,13 +35,13 @@ const categories: CategoryItem[] = [
     id: 'all',
     label: 'All Leads',
     description: 'All conversations',
-    icon: Users,
+    icon: Inbox,
   },
   {
     id: 'new_leads',
     label: 'New Leads',
     description: '≤2 messages, not qualified',
-    icon: Users,
+    icon: UserPlus,
   },
   {
     id: 'conversing',
@@ -66,10 +72,13 @@ const categories: CategoryItem[] = [
   },
 ];
 
-export function LeadSidebar({
+export const LeadSidebar = memo(function LeadSidebar({
   selectedCategory,
   onCategoryChange,
   onDateChange,
+  windowStatus = 'all',
+  onWindowStatusChange,
+  windowCounts,
   className,
 }: LeadSidebarProps) {
   const [showDateFilter, setShowDateFilter] = useState(false);
@@ -160,6 +169,52 @@ export function LeadSidebar({
         )}
       </div>
 
+      {/* Chat Window Filter */}
+      {onWindowStatusChange && (
+        <div className="border-b border-gray-200 p-3">
+          <div className="mb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Chat Window</span>
+          </div>
+          <div className="flex rounded-lg bg-gray-100 p-1">
+            <button
+              onClick={() => onWindowStatusChange('all')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'all'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              All
+            </button>
+            <button
+              onClick={() => onWindowStatusChange('open')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'open'
+                  ? 'bg-white text-green-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <MessageCircle className="w-3 h-3" />
+              Open
+            </button>
+            <button
+              onClick={() => onWindowStatusChange('expired')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'expired'
+                  ? 'bg-white text-amber-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <Clock className="w-3 h-3" />
+              Closed
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Categories */}
       <nav className="flex-1 py-2 overflow-y-auto">
         {categories.map((category) => {
@@ -196,4 +251,4 @@ export function LeadSidebar({
       </nav>
     </div>
   );
-}
+});

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
   MessageSquare,
   ClipboardCheck,
@@ -35,6 +35,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
+import { formatDateDivider, shouldShowDateDivider, formatChatBubbleTime } from '@/lib/utils/date';
 import { useAutoPolling } from '@/hooks/use-auto-polling';
 import type { ConversationObject, Message, AgentStatusResponse, Meeting, HubSpotDeal, ConversationSummaryResponse } from '@/types/cortex';
 
@@ -73,7 +75,7 @@ interface ChatPanelProps {
   onLeadUpdate?: () => void;
 }
 
-export function ChatPanel({
+export const ChatPanel = memo(function ChatPanel({
   leadId,
   leadName,
   leadCompany,
@@ -96,40 +98,62 @@ export function ChatPanel({
   const [updatingAttendance, setUpdatingAttendance] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const fetchConversation = useCallback(async (isInitial = false) => {
-    if (!leadId) return;
+  // AbortController for cancelling in-flight requests on leadId change
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // Store leadId in ref for stable callback references
+  const leadIdRef = useRef(leadId);
+  leadIdRef.current = leadId;
+
+  // Fetch conversation - uses ref for stable reference in polling
+  const fetchConversation = useCallback(async (isInitial = false, signal?: AbortSignal) => {
+    const currentLeadId = leadIdRef.current;
+    if (!currentLeadId) return;
 
     try {
       if (isInitial) setLoading(true);
-      const response = await fetch(`/api/leads/${leadId}`);
+      const response = await fetch(`/api/leads/${currentLeadId}`, { signal });
 
       if (response.ok) {
         const data = await response.json();
-        setConversation(data);
-        setAgentStatus(data.agent_status);
-        if (data.meetings) {
-          setMeetings(data.meetings);
+        // Only update state if this is still the active lead
+        if (leadIdRef.current === currentLeadId) {
+          setConversation(data);
+          setAgentStatus(data.agent_status);
+          if (data.meetings) {
+            setMeetings(data.meetings);
+          }
         }
       }
     } catch (error) {
+      // Ignore abort errors
+      if (error instanceof Error && error.name === 'AbortError') return;
       console.error('Error fetching conversation:', error);
     } finally {
-      if (isInitial) setLoading(false);
+      if (isInitial && leadIdRef.current === currentLeadId) {
+        setLoading(false);
+      }
     }
-  }, [leadId]);
+  }, []); // No dependencies - uses refs for stable reference
 
-  const fetchCRMData = useCallback(async () => {
-    if (!leadId) return;
+  // Fetch CRM data
+  const fetchCRMData = useCallback(async (signal?: AbortSignal) => {
+    const currentLeadId = leadIdRef.current;
+    if (!currentLeadId) return;
     try {
-      const response = await fetch(`/api/leads/${leadId}/crm`);
+      const response = await fetch(`/api/leads/${currentLeadId}/crm`, { signal });
       if (response.ok) {
         const data = await response.json();
-        setCrmData(data);
+        // Only update state if this is still the active lead
+        if (leadIdRef.current === currentLeadId) {
+          setCrmData(data);
+        }
       }
     } catch (error) {
+      // Ignore abort errors
+      if (error instanceof Error && error.name === 'AbortError') return;
       console.error('Error fetching CRM data:', error);
     }
-  }, [leadId]);
+  }, []); // No dependencies - uses refs for stable reference
 
   const fetchSummary = async () => {
     if (!leadId || loadingSummary) return;
@@ -171,26 +195,52 @@ export function ChatPanel({
     }
   };
 
-  // Use auto-polling hook for real-time updates
+  // Use auto-polling hook for real-time updates (polling only, no immediate call)
   useAutoPolling({
     interval: 5000,
     enabled: !!leadId,
     onPoll: fetchConversation,
   });
 
-  // Initial fetch when leadId changes
+  // Initial fetch when leadId changes - handles cancellation of in-flight requests
   useEffect(() => {
+    // Cancel any in-flight requests from previous leadId
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     if (leadId) {
-      // Reset states
+      // Create new AbortController for this leadId's requests
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      // Reset states immediately
+      setConversation(null);
       setSummary(null);
       setCrmData(null);
       setMeetings([]);
       setActiveTab('chat');
-      // Fetch data
-      fetchConversation(true);
-      fetchCRMData();
+      setMessageInput('');
+
+      // Fetch data with abort signal
+      fetchConversation(true, abortController.signal);
+      fetchCRMData(abortController.signal);
+    } else {
+      // Clear states when no lead selected
+      setConversation(null);
+      setSummary(null);
+      setCrmData(null);
+      setMeetings([]);
+      setAgentStatus(null);
     }
-  }, [leadId, fetchConversation, fetchCRMData]);
+
+    // Cleanup: abort on unmount or leadId change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [leadId]); // Only depend on leadId - callbacks use refs
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -259,14 +309,9 @@ export function ChatPanel({
     agentStatus?.agent_state === 'ACTIVE' ||
     agentStatus?.behavior?.includes('responds');
 
-  // Check if within 24-hour messaging window (WhatsApp Business API requirement)
-  const isWithin24Hours = (() => {
-    if (!conversation?.updated_at) return true; // Default to allowing messages
-    const lastUpdate = new Date(conversation.updated_at);
-    const now = new Date();
-    const hoursDiff = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
-    return hoursDiff <= 24;
-  })();
+  // Check if within 24-hour messaging window (from API)
+  // window_status: 'open' = within 24h, 'expired' = outside 24h
+  const isWindowOpen = conversation?.window_status !== 'expired';
 
   // Get phone number for WhatsApp link
   const phoneNumber = leadPhone || conversation?.client_data?.phone;
@@ -277,8 +322,8 @@ export function ChatPanel({
 
   const tabs = [
     { id: 'chat' as const, label: 'Chat', icon: MessageSquare },
-    { id: 'crm' as const, label: 'HubSpot', icon: Building2 },
     { id: 'meetings' as const, label: 'Meetings', icon: Calendar, badge: meetings.length > 0 ? meetings.length : undefined },
+    { id: 'crm' as const, label: 'HubSpot', icon: Building2 },
     { id: 'summary' as const, label: 'Summary', icon: Sparkles },
     { id: 'qualification' as const, label: 'Qualification', icon: ClipboardCheck },
     { id: 'form' as const, label: 'Form', icon: FileText },
@@ -455,26 +500,42 @@ export function ChatPanel({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {conversation?.conversation?.map((msg: Message, index: number) => (
-                    <MessageBubble key={index} message={msg} showDebug={debugMode} />
-                  ))}
+                  {conversation?.conversation?.map((msg: Message, index: number) => {
+                    const prevMsg = index > 0 ? conversation.conversation[index - 1] : null;
+                    const showDivider = shouldShowDateDivider(msg.created_at, prevMsg?.created_at);
+                    const dividerText = showDivider ? formatDateDivider(msg.created_at) : null;
+
+                    return (
+                      <div key={index}>
+                        {/* Date Divider */}
+                        {showDivider && dividerText && (
+                          <div className="flex justify-center my-4">
+                            <span className="bg-white text-gray-500 text-xs px-3 py-1 rounded-lg shadow-sm border border-gray-200">
+                              {dividerText}
+                            </span>
+                          </div>
+                        )}
+                        <MessageBubble message={msg} showDebug={debugMode} />
+                      </div>
+                    );
+                  })}
                   {/* Scroll anchor */}
                   <div ref={scrollRef} />
                 </div>
               )}
             </ScrollArea>
 
-            {/* Message Input or 24-hour Window Banner */}
+            {/* Message Input or Window Closed Banner */}
             <div className="flex-shrink-0 p-4 border-t border-gray-200">
-              {!isWithin24Hours ? (
+              {!isWindowOpen ? (
                 <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-amber-800">
-                      24-hour messaging window closed
+                      Chat window closed
                     </p>
                     <p className="text-xs text-amber-600 mt-0.5">
-                      The last message was over 24 hours ago. You can only send template messages to this contact.
+                      The customer hasn&apos;t replied in 24+ hours. You can only send template messages until they respond.
                     </p>
                   </div>
                 </div>
@@ -543,7 +604,8 @@ export function ChatPanel({
       </div>
     </div>
   );
-}
+});
+
 
 // Message Bubble Component
 // Inverted: We are the chatbot (assistant), so our messages go on the right
@@ -551,6 +613,7 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
   const [debugExpanded, setDebugExpanded] = useState(false);
   const isAssistant = message.role === 'assistant';
   const isSystem = message.role === 'system';
+  const formattedTime = formatChatBubbleTime(message.created_at);
 
   // Parse media from Cortex metadata structure
   const metadata = message.metadata;
@@ -662,6 +725,17 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
             </p>
           )}
 
+          {/* Timestamp */}
+          {formattedTime && (
+            <div className={cn(
+              'text-[10px] mt-1 text-right',
+              hasMedia ? 'px-3 pb-1' : '',
+              isAssistant ? 'text-blue-200' : 'text-gray-400'
+            )}>
+              {formattedTime}
+            </div>
+          )}
+
           {/* Debug metadata section */}
           {showDebug && metadata && Object.keys(metadata).length > 0 && (
             <div className={cn(
@@ -720,6 +794,8 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
 
 // Qualification Tab Component
 function QualificationTab({ conversation }: { conversation: ConversationObject | null }) {
+  const qualInfo = getQualificationInfo(conversation?.qualification);
+
   return (
     <ScrollArea className="flex-1 p-4">
       <div className="space-y-6">
@@ -736,10 +812,20 @@ function QualificationTab({ conversation }: { conversation: ConversationObject |
                 )}
               </div>
             </div>
-            {conversation?.qualification && (
+            {qualInfo && (
               <div className="p-4 bg-gray-50 rounded-lg">
                 <div className="text-sm text-gray-500 mb-1">Qualification Type</div>
-                <div className="font-medium">{conversation.qualification}</div>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    className={cn(
+                      'text-sm px-2 py-1 border',
+                      getQualificationClasses(qualInfo.color)
+                    )}
+                  >
+                    {qualInfo.label}
+                  </Badge>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">{qualInfo.description}</p>
               </div>
             )}
           </div>
@@ -956,14 +1042,13 @@ function MeetingsTab({
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center gap-2 pt-3">
                   {/* Join Meeting Button */}
-                  {meeting.calendar_link && (
+                  {meeting.calendar_link && !isPast && (
                     <Button
                       size="sm"
                       className={cn(
                         'h-9',
                         isLive ? 'bg-green-600 hover:bg-green-700' :
-                        isStartingSoon ? 'bg-yellow-600 hover:bg-yellow-700' :
-                        isPast ? 'bg-gray-500 hover:bg-gray-600' : ''
+                        isStartingSoon ? 'bg-yellow-600 hover:bg-yellow-700' : ''
                       )}
                       asChild
                     >
@@ -973,7 +1058,7 @@ function MeetingsTab({
                         rel="noopener noreferrer"
                       >
                         <Video className="w-4 h-4 mr-1.5" />
-                        {isLive ? 'Join Now' : isPast ? 'View Recording' : 'Join Meeting'}
+                        {isLive ? 'Join Now' : 'Join Meeting'}
                       </a>
                     </Button>
                   )}
@@ -1135,12 +1220,22 @@ function SummaryTab({
                 <div className="text-gray-500 text-xs mb-0.5">Total Messages</div>
                 <div className="font-medium">{summary.total_messages}</div>
               </div>
-              {summary.qualification && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-gray-500 text-xs mb-0.5">Qualification</div>
-                  <div className="font-medium">{summary.qualification}</div>
-                </div>
-              )}
+              {summary.qualification && (() => {
+                const qualInfo = getQualificationInfo(summary.qualification);
+                return qualInfo ? (
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="text-gray-500 text-xs mb-0.5">Qualification</div>
+                    <Badge
+                      className={cn(
+                        'text-xs px-1.5 border',
+                        getQualificationClasses(qualInfo.color)
+                      )}
+                    >
+                      {qualInfo.label}
+                    </Badge>
+                  </div>
+                ) : null;
+              })()}
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="text-gray-500 text-xs mb-0.5">Has Meeting</div>
                 <div className="font-medium">{summary.has_meeting ? 'Yes' : 'No'}</div>

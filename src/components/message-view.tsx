@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { format, isValid, isToday, isYesterday, differenceInHours } from 'date-fns';
+import { isValid, differenceInHours } from 'date-fns';
+import { formatChatBubbleTime, formatDateDivider, shouldShowDateDivider } from '@/lib/utils/date';
 import { RefreshCw, Paperclip, Send, X, AlertCircle, MessageSquare, XCircle, ListTree, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MediaMessage } from '@/components/media-message';
@@ -40,45 +41,6 @@ type Message = {
   };
 };
 
-function formatMessageTime(timestamp: string): string {
-  try {
-    const date = new Date(timestamp);
-    if (isValid(date)) {
-      return format(date, 'HH:mm');
-    }
-    return '';
-  } catch {
-    return '';
-  }
-}
-
-function formatDateDivider(timestamp: string): string {
-  try {
-    const date = new Date(timestamp);
-    if (!isValid(date)) return '';
-
-    if (isToday(date)) return 'Today';
-    if (isYesterday(date)) return 'Yesterday';
-    return format(date, 'MMMM d, yyyy');
-  } catch {
-    return '';
-  }
-}
-
-function shouldShowDateDivider(currentMsg: Message, prevMsg: Message | null): boolean {
-  if (!prevMsg) return true;
-
-  try {
-    const currentDate = new Date(currentMsg.createdAt);
-    const prevDate = new Date(prevMsg.createdAt);
-
-    if (!isValid(currentDate) || !isValid(prevDate)) return false;
-
-    return format(currentDate, 'yyyy-MM-dd') !== format(prevDate, 'yyyy-MM-dd');
-  } catch {
-    return false;
-  }
-}
 
 function isWithin24HourWindow(messages: Message[]): boolean {
   // Find the last inbound message
@@ -399,7 +361,7 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
         ) : (
           messages.map((message, index) => {
             const prevMessage = index > 0 ? messages[index - 1] : null;
-            const showDateDivider = shouldShowDateDivider(message, prevMessage);
+            const showDateDivider = shouldShowDateDivider(message.createdAt, prevMessage?.createdAt);
 
             return (
               <div key={message.id}>
@@ -487,7 +449,7 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
 
                     <div className="flex items-center gap-1.5 mt-1">
                       <span className="text-[11px] text-[#667781]">
-                        {formatMessageTime(message.createdAt)}
+                        {formatChatBubbleTime(message.createdAt)}
                       </span>
 
                       {message.messageType && (

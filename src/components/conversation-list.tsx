@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
-import { format, isValid, isToday, isYesterday } from 'date-fns';
+import { formatTimeAgo } from '@/lib/utils/date';
 import { RefreshCw, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAutoPolling } from '@/hooks/use-auto-polling';
@@ -27,18 +27,6 @@ type Conversation = {
   };
 };
 
-function formatConversationDate(timestamp: string): string {
-  try {
-    const date = new Date(timestamp);
-    if (!isValid(date)) return '';
-
-    if (isToday(date)) return format(date, 'HH:mm');
-    if (isYesterday(date)) return 'Yesterday';
-    return format(date, 'MMM d');
-  } catch {
-    return '';
-  }
-}
 
 function getAvatarInitials(contactName?: string, phoneNumber?: string): string {
   if (contactName) {
@@ -235,7 +223,7 @@ export const ConversationList = forwardRef<ConversationListRef, Props>(
                     )}
                   </div>
                   <span className="text-xs text-[#667781] flex-shrink-0 mt-0.5 ml-4">
-                    {formatConversationDate(conversation.lastActiveAt)}
+                    {formatTimeAgo(conversation.lastActiveAt)}
                   </span>
                 </div>
               </div>

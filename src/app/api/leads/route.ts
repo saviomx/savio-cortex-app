@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCortexClient } from '@/lib/cortex-client';
+import { formatTimeAgo } from '@/lib/utils/date';
 import type { ConversationSearchItem, LeadStatus } from '@/types/cortex';
 
 /**
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
     const limit = limitParam ? Math.min(parseInt(limitParam, 10), 100) : 50;
     const dateFrom = searchParams.get('date_from') || undefined;
     const dateTo = searchParams.get('date_to') || undefined;
+    const windowStatus = searchParams.get('window_status') || undefined;
 
     // Build search params - use lead_status directly for API filtering
     const searchPayload: {
@@ -26,6 +28,7 @@ export async function GET(request: Request) {
       lead_status?: string;
       date_from?: string;
       date_to?: string;
+      window_status?: string;
       cursor?: string;
       limit?: number;
     } = {
@@ -34,6 +37,7 @@ export async function GET(request: Request) {
       limit,
       date_from: dateFrom,
       date_to: dateTo,
+      window_status: windowStatus,
     };
 
     // Only add lead_status if not 'all'
@@ -64,8 +68,9 @@ export async function GET(request: Request) {
       last_message_content: item.last_message_content?.substring(0, 100),
       last_message_role: item.last_message_role,
       last_message_at: item.last_message_at || item.updated_at,
+      window_status: item.window_status,
       displayName: item.client_name || item.client_phone || `Lead #${item.id}`,
-      timeAgo: getTimeAgo(item.last_message_at || item.updated_at),
+      timeAgo: formatTimeAgo(item.last_message_at || item.updated_at),
       priority: item.state === 1 ? 'urgent' as const : 'normal' as const,
     }));
 
@@ -84,23 +89,3 @@ export async function GET(request: Request) {
   }
 }
 
-// Helper function to calculate time ago
-function getTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 60) {
-    return diffMins <= 1 ? 'just now' : `${diffMins} minutes ago`;
-  }
-  if (diffHours < 24) {
-    return diffHours === 1 ? '1 hour ago' : `about ${diffHours} hours ago`;
-  }
-  if (diffDays === 1) {
-    return '1 day ago';
-  }
-  return `${diffDays} days ago`;
-}

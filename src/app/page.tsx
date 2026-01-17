@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Header } from '@/components/header';
-import { LeadSidebar, type LeadStatus } from '@/components/lead-sidebar';
+import { LeadSidebar, type LeadStatus, type WindowStatus } from '@/components/lead-sidebar';
 import { LeadList, type LeadListRef } from '@/components/lead-list';
 import { ChatPanel } from '@/components/chat-panel';
 import type { ConversationSearchItem } from '@/types/cortex';
@@ -17,24 +17,29 @@ export default function Home() {
   const [selectedLead, setSelectedLead] = useState<SelectedLead | null>(null);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [windowStatus, setWindowStatus] = useState<WindowStatus>('all');
   const leadListRef = useRef<LeadListRef>(null);
 
-  const handleCategoryChange = (category: LeadStatus) => {
+  const handleCategoryChange = useCallback((category: LeadStatus) => {
     setSelectedCategory(category);
-  };
+  }, []);
 
-  const handleDateChange = (from: string | null, to: string | null) => {
+  const handleDateChange = useCallback((from: string | null, to: string | null) => {
     setDateFrom(from);
     setDateTo(to);
-  };
+  }, []);
 
-  const handleSelectLead = (lead: SelectedLead) => {
+  const handleWindowStatusChange = useCallback((status: WindowStatus) => {
+    setWindowStatus(status);
+  }, []);
+
+  const handleSelectLead = useCallback((lead: SelectedLead | null) => {
     setSelectedLead(lead);
-  };
+  }, []);
 
-  const handleLeadUpdate = () => {
+  const handleLeadUpdate = useCallback(() => {
     leadListRef.current?.refresh();
-  };
+  }, []);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
@@ -48,6 +53,8 @@ export default function Home() {
           selectedCategory={selectedCategory}
           onCategoryChange={handleCategoryChange}
           onDateChange={handleDateChange}
+          windowStatus={windowStatus}
+          onWindowStatusChange={handleWindowStatusChange}
           className="w-56 flex-shrink-0 hidden md:flex flex-col"
         />
 
@@ -57,6 +64,7 @@ export default function Home() {
           selectedCategory={selectedCategory}
           dateFrom={dateFrom}
           dateTo={dateTo}
+          windowStatus={windowStatus}
           selectedLeadId={selectedLead?.external_id || (selectedLead?.id ? String(selectedLead.id) : null)}
           onSelectLead={handleSelectLead}
           className="w-80 flex-shrink-0 min-h-0"
