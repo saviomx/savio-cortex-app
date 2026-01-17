@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useState, useCallback, forwardRef, useImperativeHandle, memo, useRef } from 'react';
 import { Search, AlertTriangle, Bot, User, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -8,21 +8,25 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import type { LeadStatus } from '@/components/lead-sidebar';
+import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
+import type { LeadStatus, WindowStatus } from '@/components/lead-sidebar';
 import type { ConversationSearchItem } from '@/types/cortex';
 
 interface Lead extends ConversationSearchItem {
   displayName: string;
   timeAgo: string;
   priority: 'urgent' | 'normal';
+  last_message_content?: string | null;
+  last_message_role?: string | null;
 }
 
 interface LeadListProps {
   selectedCategory: LeadStatus;
   dateFrom?: string | null;
   dateTo?: string | null;
+  windowStatus?: WindowStatus;
   selectedLeadId: string | null;
-  onSelectLead: (lead: Lead) => void;
+  onSelectLead: (lead: Lead | null) => void;
   className?: string;
 }
 
@@ -30,8 +34,8 @@ export interface LeadListRef {
   refresh: () => void;
 }
 
-export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList(
-  { selectedCategory, dateFrom, dateTo, selectedLeadId, onSelectLead, className },
+export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function LeadList(
+  { selectedCategory, dateFrom, dateTo, windowStatus, selectedLeadId, onSelectLead, className },
   ref
 ) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -42,7 +46,17 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
+  // Store filter params in refs for stable callback
+  const filtersRef = useRef({ selectedCategory, searchQuery, dateFrom, dateTo, windowStatus });
+  filtersRef.current = { selectedCategory, searchQuery, dateFrom, dateTo, windowStatus };
+
+  // Interval ref to avoid recreation
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Stable fetch function that reads from refs
   const fetchLeads = useCallback(async (cursor?: string | null, append = false) => {
+    const { selectedCategory, searchQuery, dateFrom, dateTo, windowStatus } = filtersRef.current;
+
     try {
       if (!append) setLoading(true);
       else setLoadingMore(true);
@@ -60,6 +74,9 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
       }
       if (dateTo) {
         params.set('date_to', dateTo);
+      }
+      if (windowStatus && windowStatus !== 'all') {
+        params.set('window_status', windowStatus);
       }
       if (cursor) {
         params.set('cursor', cursor);
@@ -84,15 +101,22 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [selectedCategory, searchQuery, dateFrom, dateTo]);
+  }, []); // No dependencies - uses refs
 
+  // Setup polling interval once on mount
+  useEffect(() => {
+    intervalRef.current = setInterval(() => fetchLeads(), 10000);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchLeads]);
+
+  // Fetch when filters change (separate from polling)
   useEffect(() => {
     fetchLeads();
-
-    // Auto-refresh every 10 seconds
-    const interval = setInterval(() => fetchLeads(), 10000);
-    return () => clearInterval(interval);
-  }, [fetchLeads]);
+  }, [selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, fetchLeads]);
 
   useImperativeHandle(ref, () => ({
     refresh: () => fetchLeads(),
@@ -117,16 +141,18 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
   };
 
   const getQualificationBadge = (qual: string | null | undefined) => {
-    if (!qual) return null;
-    const letter = qual.toUpperCase().charAt(0);
-    const colorClasses: Record<string, string> = {
-      A: 'bg-green-100 text-green-700 hover:bg-green-100',
-      B: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100',
-      C: 'bg-gray-100 text-gray-700 hover:bg-gray-100',
-    };
+    const info = getQualificationInfo(qual);
+    if (!info) return null;
+
     return (
-      <Badge className={cn('text-xs px-1.5', colorClasses[letter] || colorClasses.C)}>
-        {letter}
+      <Badge
+        className={cn(
+          'text-xs px-1.5 border',
+          getQualificationClasses(info.color)
+        )}
+        title={info.description}
+      >
+        {info.shortLabel}
       </Badge>
     );
   };
@@ -178,23 +204,42 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
                 <button
                   key={lead.id}
                   onClick={() => onSelectLead(lead)}
+                  onDoubleClick={() => {
+                    if (isSelected) {
+                      onSelectLead(null);
+                    }
+                  }}
                   className={cn(
                     'w-full p-4 text-left transition-colors hover:bg-gray-50',
                     isSelected && 'bg-blue-50 hover:bg-blue-50'
                   )}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Avatar */}
-                    <div
-                      className={cn(
-                        'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0',
-                        needsHuman ? 'bg-orange-100' : 'bg-gray-100'
-                      )}
-                    >
-                      {needsHuman ? (
-                        <User className="w-5 h-5 text-orange-600" />
-                      ) : (
-                        <Bot className="w-5 h-5 text-gray-600" />
+                    {/* Avatar with Status Indicator */}
+                    <div className="relative flex-shrink-0">
+                      <div
+                        className={cn(
+                          'w-10 h-10 rounded-full flex items-center justify-center',
+                          needsHuman ? 'bg-orange-100' : 'bg-gray-100'
+                        )}
+                      >
+                        {needsHuman ? (
+                          <User className="w-5 h-5 text-orange-600" />
+                        ) : (
+                          <Bot className="w-5 h-5 text-gray-600" />
+                        )}
+                      </div>
+                      {/* Window Status Indicator - positioned on avatar like presence status */}
+                      {lead.window_status && (
+                        <div
+                          className={cn(
+                            'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
+                            lead.window_status === 'open'
+                              ? 'bg-green-500'
+                              : 'bg-gray-300'
+                          )}
+                          title={lead.window_status === 'open' ? 'Chat window open' : 'Chat window closed'}
+                        />
                       )}
                     </div>
 
@@ -210,8 +255,15 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
                       </div>
 
                       {lead.client_company && (
-                        <p className="text-sm text-gray-500 truncate mb-1.5">
+                        <p className="text-sm text-gray-500 truncate">
                           {lead.client_company}
+                        </p>
+                      )}
+
+                      {/* Last Message Preview */}
+                      {lead.last_message_content && (
+                        <p className="text-sm text-gray-400 truncate mt-0.5 mb-1">
+                          {lead.last_message_content}
                         </p>
                       )}
 
@@ -271,4 +323,4 @@ export const LeadList = forwardRef<LeadListRef, LeadListProps>(function LeadList
       </ScrollArea>
     </div>
   );
-});
+}));

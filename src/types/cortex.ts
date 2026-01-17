@@ -20,6 +20,7 @@ export interface MessageMedia {
 export interface Message {
   role: MessageRole;
   content: string;
+  created_at?: string | null;
   metadata?: {
     media?: MessageMedia;
     message_type?: string;
@@ -57,6 +58,7 @@ export interface ConversationSummary {
   qualification?: string | null;
   has_meeting?: boolean;
   deal_stage?: string | null;
+  window_status?: 'open' | 'expired' | null;
 }
 
 export interface ConversationObject extends ConversationSummary {
@@ -82,6 +84,7 @@ export interface ConversationSearchItem {
   last_message_content?: string | null;
   last_message_role?: string | null;
   last_message_at?: string | null;
+  window_status?: 'open' | 'expired' | null;
 }
 
 export interface ConversationSearchResponse {
