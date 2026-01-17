@@ -11,18 +11,18 @@ function getAuthHeaders() {
 }
 
 /**
- * GET /api/admin/templates
- * List all WhatsApp templates
+ * GET /api/business/profile
+ * Get business profile
  */
 export async function GET() {
   try {
     const headers = getAuthHeaders();
-    const response = await fetch(`${CORTEX_API_URL}/templates`, { headers });
+    const response = await fetch(`${CORTEX_API_URL}/business/profile`, { headers });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Failed to fetch templates' }));
+      const error = await response.json().catch(() => ({ detail: 'Failed to fetch business profile' }));
       return NextResponse.json(
-        { error: error.detail || 'Failed to fetch templates' },
+        { error: error.detail || 'Failed to fetch business profile' },
         { status: response.status }
       );
     }
@@ -30,33 +30,33 @@ export async function GET() {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error fetching templates:', error);
+    console.error('Error fetching business profile:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch templates' },
+      { error: error instanceof Error ? error.message : 'Failed to fetch business profile' },
       { status: 500 }
     );
   }
 }
 
 /**
- * POST /api/admin/templates
- * Create a new WhatsApp template
+ * POST /api/business/profile
+ * Update business profile
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const headers = getAuthHeaders();
 
-    const response = await fetch(`${CORTEX_API_URL}/templates`, {
+    const response = await fetch(`${CORTEX_API_URL}/business/profile`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Failed to create template' }));
+      const error = await response.json().catch(() => ({ detail: 'Failed to update business profile' }));
       return NextResponse.json(
-        { error: error.detail || 'Failed to create template' },
+        { error: error.detail || 'Failed to update business profile' },
         { status: response.status }
       );
     }
@@ -64,9 +64,9 @@ export async function POST(request: Request) {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error creating template:', error);
+    console.error('Error updating business profile:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create template' },
+      { error: error instanceof Error ? error.message : 'Failed to update business profile' },
       { status: 500 }
     );
   }

@@ -4,13 +4,12 @@ const CORTEX_API_URL = process.env.CORTEX_API_URL;
 const CORTEX_API_KEY = process.env.CORTEX_API_KEY;
 
 /**
- * POST /api/admin/templates/sync
- * Sync templates from Meta
+ * GET /api/business/phone-numbers
+ * List all phone numbers
  */
-export async function POST() {
+export async function GET() {
   try {
-    const response = await fetch(`${CORTEX_API_URL}/templates/sync`, {
-      method: 'POST',
+    const response = await fetch(`${CORTEX_API_URL}/business/phone-numbers`, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${CORTEX_API_KEY}`,
@@ -18,9 +17,9 @@ export async function POST() {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Failed to sync templates' }));
+      const error = await response.json().catch(() => ({ detail: 'Failed to fetch phone numbers' }));
       return NextResponse.json(
-        { error: error.detail || 'Failed to sync templates' },
+        { error: error.detail || 'Failed to fetch phone numbers' },
         { status: response.status }
       );
     }
@@ -28,9 +27,9 @@ export async function POST() {
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error syncing templates:', error);
+    console.error('Error fetching phone numbers:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to sync templates' },
+      { error: error instanceof Error ? error.message : 'Failed to fetch phone numbers' },
       { status: 500 }
     );
   }
