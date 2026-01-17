@@ -8,13 +8,12 @@ import {
   FlaskConical,
   Settings,
   LogOut,
-  Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 
-type TabType = 'inbox' | 'metrics' | 'experiments' | 'settings' | 'admin';
+type TabType = 'inbox' | 'metrics' | 'experiments' | 'settings';
 
 interface HeaderProps {
   activeTab?: TabType;
@@ -22,19 +21,14 @@ interface HeaderProps {
 }
 
 const tabs = [
-  { id: 'inbox' as const, label: 'Inbox', icon: Mail, href: '/', adminOnly: false },
-  { id: 'metrics' as const, label: 'Metrics', icon: BarChart3, href: '/metrics', adminOnly: false },
-  { id: 'experiments' as const, label: 'Experiments', icon: FlaskConical, href: '/experiments', adminOnly: false },
-  { id: 'settings' as const, label: 'Settings', icon: Settings, href: '/settings', adminOnly: false },
-  { id: 'admin' as const, label: 'Administration', icon: Shield, href: '/admin', adminOnly: true },
+  { id: 'inbox' as const, label: 'Inbox', icon: Mail, href: '/' },
+  { id: 'metrics' as const, label: 'Metrics', icon: BarChart3, href: '/metrics' },
+  { id: 'experiments' as const, label: 'Experiments', icon: FlaskConical, href: '/experiments' },
+  { id: 'settings' as const, label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
 export function Header({ activeTab = 'inbox', className }: HeaderProps) {
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === 'admin';
-
-  // Filter tabs based on user role
-  const visibleTabs = tabs.filter(tab => !tab.adminOnly || isAdmin);
 
   return (
     <header className={cn('h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4', className)}>
@@ -54,7 +48,7 @@ export function Header({ activeTab = 'inbox', className }: HeaderProps) {
 
         {/* Tabs */}
         <nav className="flex items-center gap-1">
-          {visibleTabs.map((tab) => {
+          {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (

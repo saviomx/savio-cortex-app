@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 const CORTEX_API_URL = process.env.CORTEX_API_URL;
+const CORTEX_API_KEY = process.env.CORTEX_API_KEY;
 
-async function getAuthHeaders() {
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get('auth_token')?.value;
+function getAuthHeaders() {
   return {
     'Content-Type': 'application/json',
-    ...(authToken && { Authorization: `Bearer ${authToken}` }),
+    Authorization: `Bearer ${CORTEX_API_KEY}`,
   };
 }
 
@@ -22,7 +20,7 @@ export async function GET(
 ) {
   try {
     const { template_id } = await params;
-    const headers = await getAuthHeaders();
+    const headers = getAuthHeaders();
 
     const response = await fetch(`${CORTEX_API_URL}/templates/${template_id}`, { headers });
 
@@ -55,7 +53,7 @@ export async function DELETE(
 ) {
   try {
     const { template_id } = await params;
-    const headers = await getAuthHeaders();
+    const headers = getAuthHeaders();
 
     const response = await fetch(`${CORTEX_API_URL}/templates/${template_id}`, {
       method: 'DELETE',
