@@ -276,28 +276,24 @@ export default function FunnelMetricsPage() {
                 title="Leads Created"
                 value={volume.leads_created}
                 icon={<Users className="w-5 h-5" />}
-                gradient="from-blue-500 to-blue-600"
                 iconBg="bg-blue-100 text-blue-600"
               />
               <MetricCard
                 title="Conversations"
                 value={volume.conversations_started}
                 icon={<MessageSquare className="w-5 h-5" />}
-                gradient="from-indigo-500 to-indigo-600"
                 iconBg="bg-indigo-100 text-indigo-600"
               />
               <MetricCard
                 title="Qualified"
                 value={volume.qualified_leads}
                 icon={<CheckCircle2 className="w-5 h-5" />}
-                gradient="from-yellow-500 to-yellow-600"
                 iconBg="bg-yellow-100 text-yellow-600"
               />
               <MetricCard
                 title="Product Explored"
                 value={volume.product_explored}
                 icon={<Sparkles className="w-5 h-5" />}
-                gradient="from-emerald-500 to-emerald-600"
                 iconBg="bg-emerald-100 text-emerald-600"
                 highlight
               />
@@ -352,12 +348,11 @@ export default function FunnelMetricsPage() {
                 </div>
               ) : volume?.stages && volume.stages.length > 0 ? (
                 <div className="space-y-3">
-                  {volume.stages.map((stage, index) => (
+                  {volume.stages.map((stage) => (
                     <FunnelVolumeRow
                       key={stage.name}
                       stage={stage}
                       maxCount={volume.leads_created}
-                      isFirst={index === 0}
                     />
                   ))}
                 </div>
@@ -512,7 +507,7 @@ export default function FunnelMetricsPage() {
                       tickFormatter={(value) => `${value}%`}
                     />
                     <Tooltip
-                      content={({ active, payload, label }) => {
+                      content={({ active, payload }) => {
                         if (!active || !payload || !payload.length) return null;
                         const data = payload[0].payload as { fullName: string; rate: number; fromCount: number; toCount: number };
                         return (
@@ -653,14 +648,12 @@ function MetricCard({
   title,
   value,
   icon,
-  gradient,
   iconBg,
   highlight,
 }: {
   title: string;
   value: number;
   icon: React.ReactNode;
-  gradient: string;
   iconBg: string;
   highlight?: boolean;
 }) {
@@ -700,11 +693,9 @@ function MetricCard({
 function FunnelVolumeRow({
   stage,
   maxCount,
-  isFirst,
 }: {
   stage: FunnelStage;
   maxCount: number;
-  isFirst: boolean;
 }) {
   const widthPercent = maxCount > 0 ? Math.max((stage.count / maxCount) * 100, 5) : 5;
   const gradient = STAGE_GRADIENTS[stage.name] || { start: '#94a3b8', end: '#64748b' };

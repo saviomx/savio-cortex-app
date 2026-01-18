@@ -575,6 +575,7 @@ export default function SettingsPage() {
                             <CardTitle className="text-base">Profile Picture</CardTitle>
                           </CardHeader>
                           <CardContent>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={profile.profile_picture_url}
                               alt="Business profile"

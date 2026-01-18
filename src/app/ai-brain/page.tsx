@@ -35,7 +35,6 @@ import type {
   PromptDetail,
   PromptMetadata,
   PromptCategory,
-  AgentNode,
 } from '@/types/cortex';
 
 // Helper type for architecture node display

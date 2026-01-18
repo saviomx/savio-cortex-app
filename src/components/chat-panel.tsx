@@ -63,7 +63,6 @@ import type {
 } from '@/types/cortex';
 import { useDealStages } from '@/contexts/deal-stages-context';
 import { useCRMCacheStore } from '@/lib/stores/crm-cache-store';
-import { RefreshIndicator } from '@/components/refresh-indicator';
 
 type TabType = 'chat' | 'qualification' | 'form' | 'meetings' | 'summary' | 'crm' | 'timeline' | 'tasks';
 
@@ -126,10 +125,6 @@ export const ChatPanel = memo(function ChatPanel({
 
   // CRM Cache Store for TTL-based caching
   const crmCache = useCRMCacheStore();
-  const [formSubmissionsExpired, setFormSubmissionsExpired] = useState(false);
-  const [fullContactExpired, setFullContactExpired] = useState(false);
-  const [activityExpired, setActivityExpired] = useState(false);
-  const [tasksExpired, setTasksExpired] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -222,12 +217,6 @@ export const ChatPanel = memo(function ChatPanel({
       const cached = crmCache.getFormSubmissions(phone);
       if (cached) {
         setFormSubmissionsData(cached);
-        setFormSubmissionsExpired(false);
-        // Check if cache will expire soon
-        const timeRemaining = crmCache.getFormSubmissionsTimeRemaining(phone);
-        if (timeRemaining !== null && timeRemaining <= 0) {
-          setFormSubmissionsExpired(true);
-        }
         return;
       }
     }
@@ -239,7 +228,6 @@ export const ChatPanel = memo(function ChatPanel({
         const data = await response.json();
         setFormSubmissionsData(data);
         crmCache.setFormSubmissions(phone, data);
-        setFormSubmissionsExpired(false);
       }
     } catch (error) {
       console.error('Error fetching form submissions:', error);
@@ -258,11 +246,6 @@ export const ChatPanel = memo(function ChatPanel({
       const cached = crmCache.getFullContact(phone);
       if (cached) {
         setFullContact(cached);
-        setFullContactExpired(false);
-        const timeRemaining = crmCache.getFullContactTimeRemaining(phone);
-        if (timeRemaining !== null && timeRemaining <= 0) {
-          setFullContactExpired(true);
-        }
         return;
       }
     }
@@ -274,7 +257,6 @@ export const ChatPanel = memo(function ChatPanel({
         const data = await response.json();
         setFullContact(data);
         crmCache.setFullContact(phone, data);
-        setFullContactExpired(false);
       }
     } catch (error) {
       console.error('Error fetching full contact:', error);
@@ -293,11 +275,6 @@ export const ChatPanel = memo(function ChatPanel({
       const cached = crmCache.getActivityTimeline(phone);
       if (cached) {
         setActivityData(cached);
-        setActivityExpired(false);
-        const timeRemaining = crmCache.getActivityTimeRemaining(phone);
-        if (timeRemaining !== null && timeRemaining <= 0) {
-          setActivityExpired(true);
-        }
         return;
       }
     }
@@ -309,7 +286,6 @@ export const ChatPanel = memo(function ChatPanel({
         const data = await response.json();
         setActivityData(data);
         crmCache.setActivityTimeline(phone, data);
-        setActivityExpired(false);
       }
     } catch (error) {
       console.error('Error fetching activity:', error);
@@ -328,11 +304,6 @@ export const ChatPanel = memo(function ChatPanel({
       const cached = crmCache.getTasks(phone);
       if (cached) {
         setTasksData(cached);
-        setTasksExpired(false);
-        const timeRemaining = crmCache.getTasksTimeRemaining(phone);
-        if (timeRemaining !== null && timeRemaining <= 0) {
-          setTasksExpired(true);
-        }
         return;
       }
     }
@@ -344,7 +315,6 @@ export const ChatPanel = memo(function ChatPanel({
         const data = await response.json();
         setTasksData(data);
         crmCache.setTasks(phone, data);
-        setTasksExpired(false);
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);
@@ -426,6 +396,7 @@ export const ChatPanel = memo(function ChatPanel({
         abortControllerRef.current.abort();
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]); // Only depend on leadId - callbacks use refs
 
   // Scroll to bottom when messages change
@@ -875,6 +846,7 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
           {hasMedia && (
             <div className={displayContent ? 'mb-1' : ''}>
               {payloadType === 'image' && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={mediaUrl}
                   alt={mediaMetadata?.caption || 'Image'}
@@ -920,6 +892,7 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
                 </a>
               )}
               {payloadType === 'sticker' && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={mediaUrl}
                   alt="Sticker"
@@ -1636,7 +1609,6 @@ function CRMTab({
   const HUBSPOT_PORTAL_ID = '50418538';
   const { getStageLabel } = useDealStages();
   const [showAllProperties, setShowAllProperties] = useState(false);
-  const [showMarketing, setShowMarketing] = useState(false);
 
   // Fetch full contact data on first render if not already loaded
   useEffect(() => {
