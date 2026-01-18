@@ -20,6 +20,8 @@ import type {
   HubSpotDeal,
   DealStagesResponse,
   HubSpotLinksResponse,
+  FullContactResponse,
+  FormSubmissionsResponse,
   ConversationSummaryResponse,
   ConversionSummaryResponse,
   ErrorResponse,
@@ -32,6 +34,22 @@ import type {
   TotalMessagesResponse,
   ResponseTimeResponse,
   ConversionDailyResponse,
+  ContactActivityResponse,
+  TasksResponse,
+  CreateTaskRequest,
+  CreateTaskResponse,
+  UpdateTaskRequest,
+  UpdateTaskResponse,
+  DeleteTaskResponse,
+  GetTaskResponse,
+  CRMFunnelVolumeResponse,
+  CRMConversionRatesResponse,
+  DiagramResponse,
+  PromptListResponse,
+  PromptDetail,
+  NodeListResponse,
+  NodeDetail,
+  AgentArchitectureResponse,
 } from '@/types/cortex';
 
 class CortexAPIError extends Error {
@@ -348,6 +366,103 @@ class CortexClient {
     return this.request(`/crm/links?${searchParams.toString()}`);
   }
 
+  /**
+   * Get full contact data with all HubSpot properties, marketing attribution,
+   * and associated company IDs.
+   */
+  async getFullContact(phone: string): Promise<FullContactResponse> {
+    return this.request(`/crm/contact/full?phone=${encodeURIComponent(phone)}`);
+  }
+
+  /**
+   * Get all form submissions for a contact.
+   * Returns form metadata, field values, and campaign attribution.
+   */
+  async getFormSubmissions(phone: string): Promise<FormSubmissionsResponse> {
+    return this.request(`/crm/contact/form-submissions?phone=${encodeURIComponent(phone)}`);
+  }
+
+  /**
+   * Get contact activity timeline.
+   * Returns notes, calls, emails, meetings, and tasks sorted by timestamp.
+   */
+  async getContactActivity(params: {
+    phone: string;
+    limit?: number;
+    engagement_types?: string;
+  }): Promise<ContactActivityResponse> {
+    const searchParams = new URLSearchParams();
+    searchParams.set('phone', params.phone);
+    if (params.limit) searchParams.set('limit', String(params.limit));
+    if (params.engagement_types) searchParams.set('engagement_types', params.engagement_types);
+
+    return this.request(`/crm/contact/activity?${searchParams.toString()}`);
+  }
+
+  // ==========================================================================
+  // Tasks
+  // ==========================================================================
+
+  /**
+   * Get all tasks for a contact.
+   */
+  async getTasks(params: {
+    phone?: string;
+    external_id?: string;
+    internal_id?: number;
+  }): Promise<TasksResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.phone) searchParams.set('phone', params.phone);
+    if (params.external_id) searchParams.set('external_id', params.external_id);
+    if (params.internal_id) searchParams.set('internal_id', String(params.internal_id));
+
+    return this.request(`/crm/tasks?${searchParams.toString()}`);
+  }
+
+  /**
+   * Get a single task by ID.
+   */
+  async getTask(taskId: string): Promise<GetTaskResponse> {
+    return this.request(`/crm/tasks/${taskId}`);
+  }
+
+  /**
+   * Create a new task for a contact.
+   */
+  async createTask(
+    params: { phone?: string; external_id?: string; internal_id?: number },
+    data: CreateTaskRequest
+  ): Promise<CreateTaskResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.phone) searchParams.set('phone', params.phone);
+    if (params.external_id) searchParams.set('external_id', params.external_id);
+    if (params.internal_id) searchParams.set('internal_id', String(params.internal_id));
+
+    return this.request(`/crm/tasks?${searchParams.toString()}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update a task by ID.
+   */
+  async updateTask(taskId: string, data: UpdateTaskRequest): Promise<UpdateTaskResponse> {
+    return this.request(`/crm/tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete a task by ID.
+   */
+  async deleteTask(taskId: string): Promise<DeleteTaskResponse> {
+    return this.request(`/crm/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // ==========================================================================
   // Metrics
   // ==========================================================================
@@ -382,6 +497,91 @@ class CortexClient {
 
   async getConversionsDaily(startDate: string, endDate: string): Promise<ConversionDailyResponse> {
     return this.request(`/metrics/conversions-daily?start_date=${startDate}&end_date=${endDate}`);
+  }
+
+  // ==========================================================================
+  // CRM Funnel Metrics
+  // ==========================================================================
+
+  /**
+   * Get CRM funnel volume (counts at each stage).
+   */
+  async getCRMFunnelVolume(
+    startDate: string,
+    endDate: string
+  ): Promise<CRMFunnelVolumeResponse> {
+    return this.request(
+      `/metrics/crm/funnel-volume?start_date=${startDate}&end_date=${endDate}`
+    );
+  }
+
+  /**
+   * Get CRM conversion rates with step-by-step breakdown.
+   * This is the main endpoint for funnel metrics showing conversion rates.
+   */
+  async getCRMConversionRates(
+    startDate: string,
+    endDate: string
+  ): Promise<CRMConversionRatesResponse> {
+    return this.request(
+      `/metrics/crm/conversion-rates?start_date=${startDate}&end_date=${endDate}`
+    );
+  }
+
+  // ==========================================================================
+  // AI Architecture
+  // ==========================================================================
+
+  /**
+   * Get the Mermaid diagram of the agent architecture.
+   * Returns the diagram string and graph structure (nodes/edges).
+   */
+  async getAIDiagram(): Promise<DiagramResponse> {
+    return this.request('/ai/diagram');
+  }
+
+  /**
+   * Get list of all prompts with metadata.
+   * Optionally filter by category or node.
+   */
+  async getAIPrompts(params?: {
+    category?: string;
+    node?: string;
+  }): Promise<PromptListResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.node) searchParams.set('node', params.node);
+    const queryString = searchParams.toString();
+    return this.request(`/ai/prompts${queryString ? `?${queryString}` : ''}`);
+  }
+
+  /**
+   * Get full prompt details including content.
+   */
+  async getAIPrompt(promptId: string): Promise<PromptDetail> {
+    return this.request(`/ai/prompts/${encodeURIComponent(promptId)}`);
+  }
+
+  /**
+   * Get list of all agent nodes.
+   */
+  async getAINodes(): Promise<NodeListResponse> {
+    return this.request('/ai/nodes');
+  }
+
+  /**
+   * Get detailed information about a specific node.
+   */
+  async getAINode(nodeId: string): Promise<NodeDetail> {
+    return this.request(`/ai/nodes/${encodeURIComponent(nodeId)}`);
+  }
+
+  /**
+   * Get complete architecture overview.
+   * Includes diagram, all nodes, prompt summary, and state fields.
+   */
+  async getAIArchitecture(): Promise<AgentArchitectureResponse> {
+    return this.request('/ai/architecture');
   }
 }
 

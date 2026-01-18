@@ -448,21 +448,21 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950">
       <Header activeTab="settings" />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <div className="w-64 border-r border-gray-200 bg-white p-4">
-          <h2 className="font-semibold text-gray-900 mb-4">Settings</h2>
+        <div className="w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+          <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Settings</h2>
           <nav className="space-y-1">
             <button
               onClick={() => setActiveSection('profile')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                 activeSection === 'profile'
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
               )}
             >
               <Building2 className="w-4 h-4" />
@@ -473,19 +473,18 @@ export default function SettingsPage() {
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                 activeSection === 'phone-numbers'
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-600 hover:bg-gray-50'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
               )}
             >
               <Phone className="w-4 h-4" />
               Phone Numbers
             </button>
-
             {/* Admin-only sections */}
             {isAdmin && (
               <>
-                <div className="my-4 border-t border-gray-200" />
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-3">
+                <div className="my-4 border-t border-gray-200 dark:border-gray-700" />
+                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-3">
                   Administration
                 </p>
                 <button
@@ -493,8 +492,8 @@ export default function SettingsPage() {
                   className={cn(
                     'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     activeSection === 'templates'
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                   )}
                 >
                   <MessageSquare className="w-4 h-4" />
@@ -505,8 +504,8 @@ export default function SettingsPage() {
                   className={cn(
                     'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     activeSection === 'users'
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:bg-gray-50'
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                   )}
                 >
                   <Users className="w-4 h-4" />

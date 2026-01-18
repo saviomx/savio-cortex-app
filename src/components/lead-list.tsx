@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
 import type { LeadStatus, WindowStatus } from '@/components/lead-sidebar';
 import type { ConversationSearchItem } from '@/types/cortex';
@@ -163,7 +163,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
       <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900">{getCategoryLabel(selectedCategory)}</h2>
-          <span className="text-sm text-gray-500">{totalCount} leads</span>
+          <span className="text-sm text-gray-500">{formatNumber(totalCount)} leads</span>
         </div>
 
         {/* Search */}
@@ -229,18 +229,18 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
                           <Bot className="w-5 h-5 text-gray-600" />
                         )}
                       </div>
-                      {/* Window Status Indicator - positioned on avatar like presence status */}
-                      {lead.window_status && (
-                        <div
-                          className={cn(
-                            'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
-                            lead.window_status === 'open'
+                      {/* Status Indicator - shows red for needs human, green for open, gray for closed */}
+                      <div
+                        className={cn(
+                          'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
+                          needsHuman
+                            ? 'bg-red-500'
+                            : lead.window_status === 'open'
                               ? 'bg-green-500'
                               : 'bg-gray-300'
-                          )}
-                          title={lead.window_status === 'open' ? 'Chat window open' : 'Chat window closed'}
-                        />
-                      )}
+                        )}
+                        title={needsHuman ? 'Requires human attention' : lead.window_status === 'open' ? 'Chat window open' : 'Chat window closed'}
+                      />
                     </div>
 
                     {/* Content */}
@@ -313,7 +313,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
                       Loading...
                     </>
                   ) : (
-                    `Load More (${leads.length} of ${totalCount})`
+                    `Load More (${formatNumber(leads.length)} of ${formatNumber(totalCount)})`
                   )}
                 </Button>
               </div>
