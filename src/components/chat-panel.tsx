@@ -26,6 +26,15 @@ import {
   Bug,
   ChevronDown,
   ChevronUp,
+  History,
+  ListTodo,
+  PhoneCall,
+  MailOpen,
+  StickyNote,
+  CalendarCheck,
+  Plus,
+  Trash2,
+  Edit3,
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
@@ -34,13 +43,29 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
 import { formatDateDivider, shouldShowDateDivider, formatChatBubbleTime } from '@/lib/utils/date';
 import { useAutoPolling } from '@/hooks/use-auto-polling';
-import type { ConversationObject, Message, AgentStatusResponse, Meeting, HubSpotDeal, ConversationSummaryResponse } from '@/types/cortex';
+import type {
+  ConversationObject,
+  Message,
+  AgentStatusResponse,
+  Meeting,
+  HubSpotDeal,
+  ConversationSummaryResponse,
+  FormSubmissionsResponse,
+  FormSubmission,
+  FullContactResponse,
+  ContactActivityResponse,
+  TasksResponse,
+  HubSpotTask,
+} from '@/types/cortex';
+import { useDealStages } from '@/contexts/deal-stages-context';
+import { useCRMCacheStore } from '@/lib/stores/crm-cache-store';
+import { RefreshIndicator } from '@/components/refresh-indicator';
 
-type TabType = 'chat' | 'qualification' | 'form' | 'meetings' | 'summary' | 'crm';
+type TabType = 'chat' | 'qualification' | 'form' | 'meetings' | 'summary' | 'crm' | 'timeline' | 'tasks';
 
 interface CRMData {
   deal: HubSpotDeal | null;
@@ -89,6 +114,22 @@ export const ChatPanel = memo(function ChatPanel({
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [crmData, setCrmData] = useState<CRMData | null>(null);
   const [summary, setSummary] = useState<ConversationSummaryResponse | null>(null);
+  const [formSubmissionsData, setFormSubmissionsData] = useState<FormSubmissionsResponse | null>(null);
+  const [loadingFormSubmissions, setLoadingFormSubmissions] = useState(false);
+  const [fullContact, setFullContact] = useState<FullContactResponse | null>(null);
+  const [loadingFullContact, setLoadingFullContact] = useState(false);
+  const [activityData, setActivityData] = useState<ContactActivityResponse | null>(null);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [tasksData, setTasksData] = useState<TasksResponse | null>(null);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const { getStageLabel } = useDealStages();
+
+  // CRM Cache Store for TTL-based caching
+  const crmCache = useCRMCacheStore();
+  const [formSubmissionsExpired, setFormSubmissionsExpired] = useState(false);
+  const [fullContactExpired, setFullContactExpired] = useState(false);
+  const [activityExpired, setActivityExpired] = useState(false);
+  const [tasksExpired, setTasksExpired] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -171,6 +212,147 @@ export const ChatPanel = memo(function ChatPanel({
     }
   };
 
+  // Fetch form submissions when Form tab is activated (with TTL caching)
+  const fetchFormSubmissions = useCallback(async (forceRefresh = false) => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!phone || loadingFormSubmissions) return;
+
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const cached = crmCache.getFormSubmissions(phone);
+      if (cached) {
+        setFormSubmissionsData(cached);
+        setFormSubmissionsExpired(false);
+        // Check if cache will expire soon
+        const timeRemaining = crmCache.getFormSubmissionsTimeRemaining(phone);
+        if (timeRemaining !== null && timeRemaining <= 0) {
+          setFormSubmissionsExpired(true);
+        }
+        return;
+      }
+    }
+
+    try {
+      setLoadingFormSubmissions(true);
+      const response = await fetch(`/api/crm/contact/form-submissions?phone=${encodeURIComponent(phone)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFormSubmissionsData(data);
+        crmCache.setFormSubmissions(phone, data);
+        setFormSubmissionsExpired(false);
+      }
+    } catch (error) {
+      console.error('Error fetching form submissions:', error);
+    } finally {
+      setLoadingFormSubmissions(false);
+    }
+  }, [leadPhone, conversation?.client_data?.phone, loadingFormSubmissions, crmCache]);
+
+  // Fetch full contact data when CRM tab is activated (with TTL caching)
+  const fetchFullContact = useCallback(async (forceRefresh = false) => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!phone || loadingFullContact) return;
+
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const cached = crmCache.getFullContact(phone);
+      if (cached) {
+        setFullContact(cached);
+        setFullContactExpired(false);
+        const timeRemaining = crmCache.getFullContactTimeRemaining(phone);
+        if (timeRemaining !== null && timeRemaining <= 0) {
+          setFullContactExpired(true);
+        }
+        return;
+      }
+    }
+
+    try {
+      setLoadingFullContact(true);
+      const response = await fetch(`/api/crm/contact/full?phone=${encodeURIComponent(phone)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFullContact(data);
+        crmCache.setFullContact(phone, data);
+        setFullContactExpired(false);
+      }
+    } catch (error) {
+      console.error('Error fetching full contact:', error);
+    } finally {
+      setLoadingFullContact(false);
+    }
+  }, [leadPhone, conversation?.client_data?.phone, loadingFullContact, crmCache]);
+
+  // Fetch activity timeline when Timeline tab is activated (with TTL caching)
+  const fetchActivity = useCallback(async (forceRefresh = false) => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!phone || loadingActivity) return;
+
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const cached = crmCache.getActivityTimeline(phone);
+      if (cached) {
+        setActivityData(cached);
+        setActivityExpired(false);
+        const timeRemaining = crmCache.getActivityTimeRemaining(phone);
+        if (timeRemaining !== null && timeRemaining <= 0) {
+          setActivityExpired(true);
+        }
+        return;
+      }
+    }
+
+    try {
+      setLoadingActivity(true);
+      const response = await fetch(`/api/crm/contact/activity?phone=${encodeURIComponent(phone)}&limit=100`);
+      if (response.ok) {
+        const data = await response.json();
+        setActivityData(data);
+        crmCache.setActivityTimeline(phone, data);
+        setActivityExpired(false);
+      }
+    } catch (error) {
+      console.error('Error fetching activity:', error);
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, [leadPhone, conversation?.client_data?.phone, loadingActivity, crmCache]);
+
+  // Fetch tasks when Tasks tab is activated (with TTL caching)
+  const fetchTasks = useCallback(async (forceRefresh = false) => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!phone || loadingTasks) return;
+
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const cached = crmCache.getTasks(phone);
+      if (cached) {
+        setTasksData(cached);
+        setTasksExpired(false);
+        const timeRemaining = crmCache.getTasksTimeRemaining(phone);
+        if (timeRemaining !== null && timeRemaining <= 0) {
+          setTasksExpired(true);
+        }
+        return;
+      }
+    }
+
+    try {
+      setLoadingTasks(true);
+      const response = await fetch(`/api/crm/tasks?phone=${encodeURIComponent(phone)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTasksData(data);
+        crmCache.setTasks(phone, data);
+        setTasksExpired(false);
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    } finally {
+      setLoadingTasks(false);
+    }
+  }, [leadPhone, conversation?.client_data?.phone, loadingTasks, crmCache]);
+
   const updateMeetingAttendance = async (meetingId: number, showed: number) => {
     if (!leadId || updatingAttendance !== null) return;
     try {
@@ -219,6 +401,10 @@ export const ChatPanel = memo(function ChatPanel({
       setSummary(null);
       setCrmData(null);
       setMeetings([]);
+      setFormSubmissionsData(null);
+      setFullContact(null);
+      setActivityData(null);
+      setTasksData(null);
       setActiveTab('chat');
       setMessageInput('');
 
@@ -317,16 +503,26 @@ export const ChatPanel = memo(function ChatPanel({
   const phoneNumber = leadPhone || conversation?.client_data?.phone;
   const cleanPhone = phoneNumber?.replace(/\D/g, '');
 
-  // Check if summary can be generated (>5 messages)
-  const canGenerateSummary = (conversation?.conversation?.length || 0) > 5;
+  // Count messages from the user (not assistant/agent messages)
+  const userMessagesCount = conversation?.conversation?.filter(
+    (msg: Message) => msg.role === 'user'
+  ).length || 0;
+
+  // Only show Summary tab when there are at least 5 user messages
+  const showSummaryTab = userMessagesCount >= 5;
+
+  // Summary can be generated when we have enough user messages
+  const canGenerateSummary = showSummaryTab;
 
   const tabs = [
     { id: 'chat' as const, label: 'Chat', icon: MessageSquare },
-    { id: 'meetings' as const, label: 'Meetings', icon: Calendar, badge: meetings.length > 0 ? meetings.length : undefined },
+    { id: 'meetings' as const, label: 'Meetings', icon: Calendar, badge: meetings.length > 0 ? formatNumber(meetings.length) : undefined },
     { id: 'crm' as const, label: 'HubSpot', icon: Building2 },
-    { id: 'summary' as const, label: 'Summary', icon: Sparkles },
     { id: 'qualification' as const, label: 'Qualification', icon: ClipboardCheck },
+    { id: 'timeline' as const, label: 'Timeline', icon: History },
+    { id: 'tasks' as const, label: 'Tasks', icon: ListTodo, badge: tasksData?.total_count ? formatNumber(tasksData.total_count) : undefined },
     { id: 'form' as const, label: 'Form', icon: FileText },
+    ...(showSummaryTab ? [{ id: 'summary' as const, label: 'Summary', icon: Sparkles }] : []),
   ];
 
   if (!leadId) {
@@ -358,6 +554,13 @@ export const ChatPanel = memo(function ChatPanel({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            {/* Deal Stage Badge - next to WhatsApp */}
+            {(crmData?.deal?.dealstage_label || (crmData?.deal?.dealstage && getStageLabel(crmData.deal.dealstage))) && (
+              <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 px-3 py-1.5">
+                {crmData?.deal?.dealstage_label || getStageLabel(crmData?.deal?.dealstage)}
+              </Badge>
+            )}
+
             {/* WhatsApp Button */}
             {cleanPhone && (
               <a
@@ -368,19 +571,6 @@ export const ChatPanel = memo(function ChatPanel({
               >
                 <FaWhatsapp className="w-4 h-4" />
                 Open WhatsApp
-              </a>
-            )}
-
-            {/* HubSpot Deal Button */}
-            {crmData?.has_deal && crmData.deal && (
-              <a
-                href={crmData.links.deal_link || `https://app.hubspot.com/contacts/50418538/record/0-3/${crmData.deal.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                HubSpot Deal
               </a>
             )}
 
@@ -417,14 +607,9 @@ export const ChatPanel = memo(function ChatPanel({
             </Badge>
           )}
           {crmData?.owner && (
-            <Badge variant="outline" className="flex items-center gap-1">
+            <Badge variant="secondary" className="flex items-center gap-1 bg-gray-100 text-gray-700">
               <User className="w-3 h-3" />
               {crmData.owner.firstName} {crmData.owner.lastName}
-            </Badge>
-          )}
-          {crmData?.deal?.dealstage_label && (
-            <Badge variant="secondary">
-              {crmData.deal.dealstage_label}
             </Badge>
           )}
           {conversation?.client_data?.assigned_sdr_id && (
@@ -465,7 +650,7 @@ export const ChatPanel = memo(function ChatPanel({
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {activeTab === 'chat' && (
           <>
             {/* Debug Toggle */}
@@ -577,7 +762,11 @@ export const ChatPanel = memo(function ChatPanel({
         )}
 
         {activeTab === 'form' && (
-          <FormTab conversation={conversation} />
+          <FormTab
+            formSubmissionsData={formSubmissionsData}
+            loading={loadingFormSubmissions}
+            onFetch={fetchFormSubmissions}
+          />
         )}
 
         {activeTab === 'meetings' && (
@@ -588,18 +777,40 @@ export const ChatPanel = memo(function ChatPanel({
           />
         )}
 
-        {activeTab === 'summary' && (
+        {activeTab === 'summary' && showSummaryTab && (
           <SummaryTab
             summary={summary}
             canGenerate={canGenerateSummary}
             loading={loadingSummary}
             onGenerate={fetchSummary}
-            messagesCount={conversation?.conversation?.length || 0}
+            userMessagesCount={userMessagesCount}
           />
         )}
 
         {activeTab === 'crm' && (
-          <CRMTab crmData={crmData} />
+          <CRMTab
+            crmData={crmData}
+            fullContact={fullContact}
+            loadingFullContact={loadingFullContact}
+            onFetchFullContact={fetchFullContact}
+          />
+        )}
+
+        {activeTab === 'timeline' && (
+          <TimelineTab
+            activityData={activityData}
+            loading={loadingActivity}
+            onFetch={fetchActivity}
+          />
+        )}
+
+        {activeTab === 'tasks' && (
+          <TasksTab
+            tasksData={tasksData}
+            loading={loadingTasks}
+            onFetch={fetchTasks}
+            leadPhone={leadPhone || conversation?.client_data?.phone || null}
+          />
         )}
       </div>
     </div>
@@ -795,10 +1006,12 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
 // Qualification Tab Component
 function QualificationTab({ conversation }: { conversation: ConversationObject | null }) {
   const qualInfo = getQualificationInfo(conversation?.qualification);
+  const clientData = conversation?.client_data;
 
   return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-6">
+    <ScrollArea className="flex-1 h-full">
+      <div className="p-4 space-y-6 pb-8">
+        {/* Lead Qualification Section */}
         <div>
           <h3 className="font-medium text-gray-900 mb-3">Lead Qualification</h3>
           <div className="grid gap-4">
@@ -830,21 +1043,11 @@ function QualificationTab({ conversation }: { conversation: ConversationObject |
             )}
           </div>
         </div>
-      </div>
-    </ScrollArea>
-  );
-}
 
-// Form Tab Component
-function FormTab({ conversation }: { conversation: ConversationObject | null }) {
-  const clientData = conversation?.client_data;
-
-  return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-6">
+        {/* AI Gathered Information Section */}
         <div>
-          <h3 className="font-medium text-gray-900 mb-3">Contact Information</h3>
-          <div className="grid gap-4">
+          <h3 className="font-medium text-gray-900 mb-3">AI Gathered Information</h3>
+          <div className="grid gap-3">
             {clientData?.name && (
               <FormField label="Name" value={clientData.name} />
             )}
@@ -869,10 +1072,189 @@ function FormTab({ conversation }: { conversation: ConversationObject | null }) 
             {clientData?.avg_invoices && (
               <FormField label="Avg. Invoices" value={String(clientData.avg_invoices)} />
             )}
+            {!clientData?.name && !clientData?.email && !clientData?.phone && !clientData?.company && (
+              <p className="text-sm text-gray-500">No contact information available</p>
+            )}
           </div>
         </div>
       </div>
     </ScrollArea>
+  );
+}
+
+// Form Tab Component - Shows form submissions and marketing attribution
+function FormTab({
+  formSubmissionsData,
+  loading,
+  onFetch,
+}: {
+  formSubmissionsData: FormSubmissionsResponse | null;
+  loading: boolean;
+  onFetch: () => void;
+}) {
+  // Fetch data on first render if not already loaded
+  useEffect(() => {
+    if (!formSubmissionsData && !loading) {
+      onFetch();
+    }
+  }, [formSubmissionsData, loading, onFetch]);
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500" />
+          <p className="text-gray-500">Loading form submissions...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!formSubmissionsData || !formSubmissionsData.submissions || formSubmissionsData.submissions.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center text-gray-500">
+          <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No form submissions found</p>
+          <p className="text-sm mt-1">This contact has not submitted any forms</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onFetch}
+            className="mt-4"
+          >
+            Refresh
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ScrollArea className="flex-1 h-full">
+      <div className="p-4 space-y-6 pb-8">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium text-gray-900">
+            Form Submissions ({formatNumber(formSubmissionsData.total_count)})
+          </h3>
+          <Button size="sm" variant="outline" onClick={onFetch} className="h-8">
+            Refresh
+          </Button>
+        </div>
+
+        {/* Form Submissions List */}
+        <div className="space-y-4">
+          {formSubmissionsData.submissions.map((submission, index) => (
+            <FormSubmissionCard key={submission.submission_id || index} submission={submission} />
+          ))}
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+// Individual Form Submission Card
+function FormSubmissionCard({ submission }: { submission: FormSubmission }) {
+  const [expanded, setExpanded] = useState(false);
+  const submittedDate = submission.submitted_at ? new Date(submission.submitted_at) : null;
+
+  return (
+    <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-4 flex items-start justify-between text-left hover:bg-gray-100 transition-colors"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+            <span className="font-medium text-gray-900 truncate">
+              {submission.form_name || 'Unnamed Form'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+            {submittedDate && (
+              <span className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {submittedDate.toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
+            {submission.campaign_name && (
+              <Badge variant="secondary" className="text-xs">
+                {submission.campaign_name}
+              </Badge>
+            )}
+          </div>
+        </div>
+        {expanded ? (
+          <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        )}
+      </button>
+
+      {/* Expanded Content */}
+      {expanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-gray-200 bg-white">
+          {/* Form Fields */}
+          {submission.values && submission.values.length > 0 && (
+            <div className="pt-4">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                Form Fields
+              </div>
+              <div className="grid gap-2">
+                {submission.values.map((field, idx) => (
+                  <div key={idx} className="p-2 bg-gray-50 rounded">
+                    <div className="text-xs text-gray-500">{field.label || field.name}</div>
+                    <div className="text-sm font-medium text-gray-900 break-words">
+                      {field.value || '-'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Page URL */}
+          {submission.page_url && (
+            <div>
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                Submitted From
+              </div>
+              <a
+                href={submission.page_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:underline break-all flex items-center gap-1"
+              >
+                {submission.page_title || submission.page_url}
+                <ExternalLink className="w-3 h-3 flex-shrink-0" />
+              </a>
+            </div>
+          )}
+
+          {/* Metadata */}
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+            <div>
+              <div className="text-xs text-gray-500">Form ID</div>
+              <div className="text-xs font-mono text-gray-700 truncate">{submission.form_id}</div>
+            </div>
+            {submission.submission_id && (
+              <div>
+                <div className="text-xs text-gray-500">Submission ID</div>
+                <div className="text-xs font-mono text-gray-700 truncate">{submission.submission_id}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -930,7 +1312,7 @@ function MeetingsTab({
   return (
     <ScrollArea className="flex-1 h-full">
       <div className="p-4 space-y-4 pb-8">
-        <h3 className="font-medium text-gray-900 mb-3">Meetings ({meetings.length})</h3>
+        <h3 className="font-medium text-gray-900 mb-3">Meetings ({formatNumber(meetings.length)})</h3>
 
         <div className="grid gap-4">
           {meetings.map((meeting) => {
@@ -1134,19 +1516,22 @@ function SummaryTab({
   canGenerate,
   loading,
   onGenerate,
-  messagesCount,
+  userMessagesCount,
 }: {
   summary: ConversationSummaryResponse | null;
   canGenerate: boolean;
   loading: boolean;
   onGenerate: () => void;
-  messagesCount: number;
+  userMessagesCount: number;
 }) {
   return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-4">
+    <ScrollArea className="flex-1 h-full">
+      <div className="p-4 space-y-4 pb-8">
         <div className="flex items-center justify-between">
-          <h3 className="font-medium text-gray-900">AI Summary</h3>
+          <div>
+            <h3 className="font-medium text-gray-900">AI Summary</h3>
+            <p className="text-xs text-gray-500">{formatNumber(userMessagesCount)} user messages</p>
+          </div>
           {canGenerate && (
             <Button
               size="sm"
@@ -1168,18 +1553,6 @@ function SummaryTab({
             </Button>
           )}
         </div>
-
-        {!canGenerate && (
-          <div className="text-center text-gray-500 py-8">
-            <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p className="font-medium">Not enough messages</p>
-            <p className="text-sm mt-1">
-              Summary generation requires more than 5 messages.
-              <br />
-              Current: {messagesCount} message{messagesCount !== 1 ? 's' : ''}
-            </p>
-          </div>
-        )}
 
         {canGenerate && !summary && !loading && (
           <div className="text-center text-gray-500 py-8">
@@ -1249,8 +1622,28 @@ function SummaryTab({
 }
 
 // CRM/HubSpot Tab Component
-function CRMTab({ crmData }: { crmData: CRMData | null }) {
+function CRMTab({
+  crmData,
+  fullContact,
+  loadingFullContact,
+  onFetchFullContact,
+}: {
+  crmData: CRMData | null;
+  fullContact: FullContactResponse | null;
+  loadingFullContact: boolean;
+  onFetchFullContact: () => void;
+}) {
   const HUBSPOT_PORTAL_ID = '50418538';
+  const { getStageLabel } = useDealStages();
+  const [showAllProperties, setShowAllProperties] = useState(false);
+  const [showMarketing, setShowMarketing] = useState(false);
+
+  // Fetch full contact data on first render if not already loaded
+  useEffect(() => {
+    if (!fullContact && !loadingFullContact) {
+      onFetchFullContact();
+    }
+  }, [fullContact, loadingFullContact, onFetchFullContact]);
 
   if (!crmData) {
     return (
@@ -1263,7 +1656,7 @@ function CRMTab({ crmData }: { crmData: CRMData | null }) {
     );
   }
 
-  const hasAnyData = crmData.has_deal || crmData.has_contact || crmData.owner;
+  const hasAnyData = crmData.has_deal || crmData.has_contact || crmData.owner || fullContact;
 
   if (!hasAnyData) {
     return (
@@ -1277,213 +1670,349 @@ function CRMTab({ crmData }: { crmData: CRMData | null }) {
     );
   }
 
+  const props = fullContact?.properties || {};
+
+  // Helper to format property values for display
+  const formatPropertyValue = (value: string | number | boolean | null | undefined): string => {
+    if (value === null || value === undefined || value === '') return '-';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    const strValue = String(value);
+    // Format snake_case values to readable text
+    if (strValue.includes('_') && !strValue.includes(' ') && !strValue.includes('/') && !strValue.includes('@')) {
+      return strValue.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    }
+    return strValue;
+  };
+
+  // Fields to show prominently in the contact card
+  const prominentFields = [
+    'firstname', 'lastname', 'email', 'phone', 'mobilephone', 'company', 'jobtitle',
+    'annualrevenue', 'cuantos_cobros_haces_al_mes', 'start_date', 'call_status',
+    'lifecyclestage', 'createdate', 'lastmodifieddate',
+    'que_funcion_desempenas_dentro_de_tu_empresa', 'cuanto_vende_tu_empresa_al_ano',
+    'cual_funcionalidad_es_la_que_mas_te_interesa',
+  ];
+
+  // Fields to completely hide from "All Properties" (internal IDs, already shown, or analytics)
+  const hiddenFromAllProps = new Set([
+    // Internal IDs
+    'id', 'hs_object_id', 'hs_all_contact_vids',
+    // Already shown in contact card
+    ...prominentFields,
+    // Marketing/Analytics fields (shown in Marketing Attribution)
+    'hs_analytics_source', 'hs_analytics_source_data_1', 'hs_analytics_source_data_2',
+    'hs_analytics_first_url', 'hs_analytics_first_referrer', 'hs_analytics_first_timestamp',
+    'hs_analytics_first_touch_converting_campaign', 'hs_analytics_last_touch_converting_campaign',
+    'hs_latest_source', 'hs_latest_source_data_1', 'hs_latest_source_data_2',
+    'first_conversion_date', 'first_conversion_event_name',
+    'recent_conversion_date', 'recent_conversion_event_name',
+    'num_conversion_events',
+    'hubspot_owner_id', // Shown in Owner section
+  ]);
+
+  // Get remaining properties for "All Properties" section
+  const remainingProperties = (fullContact?.properties
+    ? Object.entries(fullContact.properties)
+        .filter(([key, value]) =>
+          !hiddenFromAllProps.has(key) &&
+          value !== null &&
+          value !== undefined &&
+          value !== ''
+        )
+        .sort(([a], [b]) => a.localeCompare(b))
+    : []) || [];
+
+  // Build key metrics array for cleaner rendering
+  const keyMetrics = [
+    { key: 'annualrevenue', label: 'Annual Revenue', value: props.annualrevenue, color: 'emerald' },
+    { key: 'cuanto_vende_tu_empresa_al_ano', label: 'Company Sales/Year', value: props.cuanto_vende_tu_empresa_al_ano, color: 'emerald' },
+    { key: 'cuantos_cobros_haces_al_mes', label: 'Monthly Collections', value: props.cuantos_cobros_haces_al_mes, color: 'violet' },
+    { key: 'que_funcion_desempenas_dentro_de_tu_empresa', label: 'Role', value: props.que_funcion_desempenas_dentro_de_tu_empresa, color: 'slate' },
+    { key: 'cual_funcionalidad_es_la_que_mas_te_interesa', label: 'Interest', value: props.cual_funcionalidad_es_la_que_mas_te_interesa, color: 'rose' },
+    { key: 'start_date', label: 'Start Date', value: props.start_date, color: 'amber' },
+    { key: 'call_status', label: 'Call Status', value: props.call_status, color: 'sky' },
+  ].filter(m => m.value);
+
+  const colorClasses: Record<string, { bg: string; text: string; border: string }> = {
+    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+    violet: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200' },
+    slate: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+    rose: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+    amber: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+    sky: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
+  };
+
   return (
     <ScrollArea className="flex-1 h-full">
-      <div className="p-4 space-y-6 pb-8">
-        <h3 className="font-medium text-gray-900">HubSpot CRM</h3>
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap gap-2">
-          {crmData.has_contact && crmData.contact && (
-            <a
-              href={crmData.links.contact_link || `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-1/${crmData.contact.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-            >
-              <User className="w-4 h-4" />
-              Open Contact
-            </a>
-          )}
-          {crmData.has_deal && crmData.deal && (
-            <a
-              href={crmData.links.deal_link || `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-3/${crmData.deal.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Open Deal
-            </a>
-          )}
-          {crmData.links.company_link && (
-            <a
-              href={crmData.links.company_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-            >
-              <Building className="w-4 h-4" />
-              Open Company
-            </a>
-          )}
+      <div className="p-3 space-y-3 pb-6">
+        {/* Refresh Button */}
+        <div className="flex items-center justify-end">
+          <button
+            onClick={onFetchFullContact}
+            disabled={loadingFullContact}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-50"
+          >
+            <Loader2 className={cn("w-3.5 h-3.5", loadingFullContact && "animate-spin")} />
+            {loadingFullContact ? 'Refreshing...' : 'Refresh'}
+          </button>
         </div>
 
-        {/* Contact Info */}
-        {crmData.has_contact && crmData.contact && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-700">Contact</h4>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-              {/* Contact Header */}
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                  <User className="w-5 h-5 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-900">
-                    {crmData.contact.firstname} {crmData.contact.lastname}
-                  </div>
-                  {crmData.contact.position && (
-                    <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                      <Briefcase className="w-3 h-3" />
-                      {crmData.contact.position}
-                    </div>
-                  )}
-                  {crmData.contact.company && (
-                    <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                      <Building className="w-3 h-3" />
-                      {crmData.contact.company}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Lifecycle Stage Badge */}
-              {crmData.contact.lifecyclestage && (
-                <div>
-                  <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
-                    {crmData.contact.lifecyclestage.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                  </Badge>
-                </div>
-              )}
-
-              {/* Contact Details */}
-              <div className="space-y-2 pt-2 border-t border-gray-200">
-                {crmData.contact.email && (
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <a href={`mailto:${crmData.contact.email}`} className="text-sm text-blue-600 hover:underline truncate">
-                      {crmData.contact.email}
-                    </a>
-                  </div>
-                )}
-                {crmData.contact.phone && (
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <a href={`tel:${crmData.contact.phone}`} className="text-sm text-blue-600 hover:underline">
-                      {crmData.contact.phone}
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {/* Dates */}
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200">
-                {crmData.contact.createdate && (
-                  <div>
-                    <div className="text-xs text-gray-500">Created</div>
-                    <div className="text-sm font-medium">
-                      {new Date(crmData.contact.createdate).toLocaleDateString()}
-                    </div>
-                  </div>
-                )}
-                {crmData.contact.lastmodifieddate && (
-                  <div>
-                    <div className="text-xs text-gray-500">Last Modified</div>
-                    <div className="text-sm font-medium">
-                      {new Date(crmData.contact.lastmodifieddate).toLocaleDateString()}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-xs text-gray-400 pt-2 border-t border-gray-200">
-                HubSpot ID: {crmData.contact.id}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Deal Info */}
-        {crmData.has_deal && crmData.deal && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-700">Deal</h4>
-            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-              <div>
-                <div className="text-sm font-medium">{crmData.deal.dealname}</div>
-                <div className="text-xs text-gray-400">ID: {crmData.deal.id}</div>
-              </div>
-
-              {/* Deal Stage Badge */}
-              {(crmData.deal.dealstage_label || crmData.deal.dealstage) && (
-                <div>
-                  <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100">
-                    {crmData.deal.dealstage_label || `Stage: ${crmData.deal.dealstage}`}
-                  </Badge>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                {crmData.deal.amount !== null && crmData.deal.amount !== undefined && (
-                  <div>
-                    <div className="text-xs text-gray-500">Amount</div>
-                    <div className="text-sm font-medium">${crmData.deal.amount.toLocaleString()}</div>
-                  </div>
-                )}
-                {crmData.deal.pipeline_label && (
-                  <div>
-                    <div className="text-xs text-gray-500">Pipeline</div>
-                    <div className="text-sm font-medium">{crmData.deal.pipeline_label}</div>
-                  </div>
-                )}
-                {crmData.deal.closedate && (
-                  <div>
-                    <div className="text-xs text-gray-500">Close Date</div>
-                    <div className="text-sm font-medium">
-                      {new Date(crmData.deal.closedate).toLocaleDateString()}
-                    </div>
-                  </div>
-                )}
-                {crmData.deal.createdate && (
-                  <div>
-                    <div className="text-xs text-gray-500">Created</div>
-                    <div className="text-sm font-medium">
-                      {new Date(crmData.deal.createdate).toLocaleDateString()}
-                    </div>
-                  </div>
-                )}
-                {crmData.deal.lastmodifieddate && (
-                  <div>
-                    <div className="text-xs text-gray-500">Last Modified</div>
-                    <div className="text-sm font-medium">
-                      {new Date(crmData.deal.lastmodifieddate).toLocaleDateString()}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Owner Info */}
+        {/* 1. Owner */}
         {crmData.owner && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-gray-700">Owner</h4>
-            <div className="bg-gray-50 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                  <User className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium">
-                    {crmData.owner.firstName} {crmData.owner.lastName}
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-white text-xs font-medium">
+              {crmData.owner.firstName?.charAt(0)}{crmData.owner.lastName?.charAt(0)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-gray-800">
+                {crmData.owner.firstName} {crmData.owner.lastName}
+              </div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-wide">HubSpot Owner</div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. Contact Card */}
+        {((crmData.has_contact && crmData.contact) || fullContact) && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-3 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                    {String(props.firstname || crmData.contact?.firstname || '?').charAt(0).toUpperCase()}
                   </div>
-                  {crmData.owner.email && (
-                    <div className="text-xs text-gray-500">{crmData.owner.email}</div>
-                  )}
-                  <div className="text-xs text-gray-400">ID: {crmData.owner.id}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-gray-900">
+                      {props.firstname || crmData.contact?.firstname} {props.lastname || crmData.contact?.lastname}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      {(props.lifecyclestage || crmData.contact?.lifecyclestage) && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                          {formatPropertyValue(props.lifecyclestage || crmData.contact?.lifecyclestage)}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href={fullContact?.hubspot_link || crmData.links.contact_link || `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-1/${crmData.contact?.id || fullContact?.contact_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Open in HubSpot
+                </a>
+              </div>
+            </div>
+            <div className="px-3 py-2 space-y-1.5 bg-gray-50/50">
+              {(props.email || crmData.contact?.email) && (
+                <a href={`mailto:${props.email || crmData.contact?.email}`} className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600 transition-colors">
+                  <Mail className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="truncate">{props.email || crmData.contact?.email}</span>
+                </a>
+              )}
+              {(props.phone || crmData.contact?.phone) && (
+                <a href={`tel:${props.phone || crmData.contact?.phone}`} className="flex items-center gap-2 text-xs text-gray-600 hover:text-blue-600 transition-colors">
+                  <Phone className="w-3.5 h-3.5 text-gray-400" />
+                  <span>{props.phone || crmData.contact?.phone}</span>
+                </a>
+              )}
+            </div>
+            {(props.createdate || crmData.contact?.createdate) && (
+              <div className="px-3 py-2 border-t border-gray-100 text-[10px] text-gray-400">
+                Created {new Date(String(props.createdate || crmData.contact?.createdate)).toLocaleDateString()}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Additional Properties (Key Metrics) */}
+        {keyMetrics.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-100">
+              <div className="text-xs font-medium text-gray-700">Additional Properties</div>
+            </div>
+            <div className="p-3 grid grid-cols-2 gap-2">
+              {keyMetrics.map((metric) => {
+                const colors = colorClasses[metric.color] || colorClasses.slate;
+                return (
+                  <div key={metric.key} className={cn("px-2.5 py-2 rounded-md border", colors.bg, colors.border)}>
+                    <div className={cn("text-[10px] font-medium uppercase tracking-wide", colors.text)}>{metric.label}</div>
+                    <div className={cn("text-sm font-semibold mt-0.5", colors.text)}>{formatPropertyValue(metric.value)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Other Properties (collapsible) */}
+        {remainingProperties && remainingProperties.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+            <button
+              onClick={() => setShowAllProperties(!showAllProperties)}
+              className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <span>Other Properties ({formatNumber(remainingProperties.length)})</span>
+              {showAllProperties ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {showAllProperties && (
+              <div className="px-3 pb-3 max-h-[200px] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-1.5">
+                  {remainingProperties.map(([key, value]) => (
+                    <div key={key} className="px-2 py-1.5 bg-gray-50 rounded text-xs">
+                      <div className="text-gray-400 truncate text-[10px]" title={key}>
+                        {key.replace(/^hs_/i, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </div>
+                      <div className="font-medium text-gray-700 truncate">{formatPropertyValue(value)}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* 4. Company Card */}
+        {crmData.links.company_link && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                    <Building className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      {props.company || crmData.contact?.company || 'Company'}
+                    </div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-wide">Associated Company</div>
+                  </div>
+                </div>
+                <a
+                  href={crmData.links.company_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Open in HubSpot
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. Deal Card */}
+        {crmData.has_deal && crmData.deal && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-3 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <Briefcase className="w-4 h-4 text-orange-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-900 truncate">{crmData.deal.dealname}</div>
+                    <div className="flex items-center gap-2">
+                      {(crmData.deal.dealstage_label || crmData.deal.dealstage) && (
+                        <Badge className="text-[10px] px-1.5 py-0 h-4 bg-purple-100 text-purple-700 hover:bg-purple-100">
+                          {crmData.deal.dealstage_label || getStageLabel(crmData.deal.dealstage) || crmData.deal.dealstage}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href={crmData.links.deal_link || `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-3/${crmData.deal.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Open in HubSpot
+                </a>
+              </div>
+            </div>
+            <div className="p-3 grid grid-cols-2 gap-3 text-xs">
+              {crmData.deal.amount !== null && crmData.deal.amount !== undefined && (
+                <div>
+                  <div className="text-gray-500">Amount</div>
+                  <div className="font-semibold text-gray-900">${crmData.deal.amount.toLocaleString()}</div>
+                </div>
+              )}
+              {crmData.deal.pipeline_label && (
+                <div>
+                  <div className="text-gray-500">Pipeline</div>
+                  <div className="font-semibold text-gray-900">{crmData.deal.pipeline_label}</div>
+                </div>
+              )}
+              {crmData.deal.closedate && (
+                <div>
+                  <div className="text-gray-500">Close Date</div>
+                  <div className="font-semibold text-gray-900">{new Date(crmData.deal.closedate).toLocaleDateString()}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 6. Origin Card (Marketing Attribution) */}
+        {fullContact?.marketing_attribution && Object.keys(fullContact.marketing_attribution).length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-100">
+              <div className="text-xs font-medium text-gray-700">Origin</div>
+            </div>
+            <div className="p-3 space-y-2">
+              {fullContact.marketing_attribution.original_source && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Original Source</span>
+                  <span className="text-xs font-medium text-gray-800">{formatPropertyValue(fullContact.marketing_attribution.original_source)}</span>
+                </div>
+              )}
+              {fullContact.marketing_attribution.original_source_drill_down_1 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Source Detail</span>
+                  <span className="text-xs font-medium text-gray-800">{formatPropertyValue(fullContact.marketing_attribution.original_source_drill_down_1)}</span>
+                </div>
+              )}
+              {fullContact.marketing_attribution.latest_source && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Latest Source</span>
+                  <span className="text-xs font-medium text-gray-800">{formatPropertyValue(fullContact.marketing_attribution.latest_source)}</span>
+                </div>
+              )}
+              {(fullContact.marketing_attribution.utm_source || fullContact.marketing_attribution.utm_medium || fullContact.marketing_attribution.utm_campaign) && (
+                <div className="pt-2 border-t border-gray-100">
+                  <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1.5">UTM Parameters</div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {fullContact.marketing_attribution.utm_source && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        source: {fullContact.marketing_attribution.utm_source}
+                      </Badge>
+                    )}
+                    {fullContact.marketing_attribution.utm_medium && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        medium: {fullContact.marketing_attribution.utm_medium}
+                      </Badge>
+                    )}
+                    {fullContact.marketing_attribution.utm_campaign && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        campaign: {fullContact.marketing_attribution.utm_campaign}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+              {fullContact.marketing_attribution.first_conversion_event && (
+                <div className="pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">First Conversion</span>
+                    <span className="text-xs font-medium text-gray-800">{formatPropertyValue(fullContact.marketing_attribution.first_conversion_event)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1491,3 +2020,784 @@ function CRMTab({ crmData }: { crmData: CRMData | null }) {
     </ScrollArea>
   );
 }
+
+// Timeline Tab Component - Shows HubSpot activity timeline
+function TimelineTab({
+  activityData,
+  loading,
+  onFetch,
+}: {
+  activityData: ContactActivityResponse | null;
+  loading: boolean;
+  onFetch: () => void;
+}) {
+  // Fetch data on first render if not already loaded
+  useEffect(() => {
+    if (!activityData && !loading) {
+      onFetch();
+    }
+  }, [activityData, loading, onFetch]);
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500" />
+          <p className="text-gray-500">Loading activity timeline...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activityData || !activityData.activities || activityData.activities.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center text-gray-500">
+          <History className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p>No activity found</p>
+          <p className="text-sm mt-1">This contact has no recorded activities in HubSpot</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onFetch}
+            className="mt-4"
+          >
+            Refresh
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Get icon for activity type
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'notes':
+        return <StickyNote className="w-4 h-4" />;
+      case 'calls':
+        return <PhoneCall className="w-4 h-4" />;
+      case 'emails':
+        return <MailOpen className="w-4 h-4" />;
+      case 'meetings':
+        return <CalendarCheck className="w-4 h-4" />;
+      case 'tasks':
+        return <ListTodo className="w-4 h-4" />;
+      default:
+        return <History className="w-4 h-4" />;
+    }
+  };
+
+  // Get color classes for activity type
+  const getActivityColor = (type: string) => {
+    switch (type) {
+      case 'notes':
+        return { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200' };
+      case 'calls':
+        return { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' };
+      case 'emails':
+        return { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' };
+      case 'meetings':
+        return { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' };
+      case 'tasks':
+        return { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' };
+      default:
+        return { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' };
+    }
+  };
+
+  // Format duration in seconds to human readable
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins < 60) return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    const remainingMins = mins % 60;
+    return remainingMins > 0 ? `${hours}h ${remainingMins}m` : `${hours}h`;
+  };
+
+  return (
+    <ScrollArea className="flex-1 h-full">
+      <div className="p-4 space-y-4 pb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-gray-900">Activity Timeline</h3>
+            <p className="text-xs text-gray-500">{formatNumber(activityData.total_count)} activities</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={onFetch} className="h-8">
+            Refresh
+          </Button>
+        </div>
+
+        {/* Activity Counts Summary */}
+        {activityData.activity_counts && Object.keys(activityData.activity_counts).length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {Object.entries(activityData.activity_counts).map(([type, count]) => {
+              const colors = getActivityColor(type);
+              return (
+                <Badge key={type} variant="secondary" className={cn("text-xs", colors.bg, colors.text)}>
+                  {type}: {count}
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Timeline */}
+        <div className="relative">
+          {/* Timeline line */}
+          <div className="absolute left-5 top-0 bottom-0 w-px bg-gray-200" />
+
+          <div className="space-y-4">
+            {activityData.activities.map((activity, index) => {
+              const colors = getActivityColor(activity.type);
+              const timestamp = activity.timestamp ? new Date(activity.timestamp) : null;
+
+              return (
+                <div key={activity.id || index} className="relative pl-12">
+                  {/* Icon */}
+                  <div className={cn(
+                    "absolute left-2 w-7 h-7 rounded-full flex items-center justify-center border-2 border-white shadow-sm",
+                    colors.bg, colors.text
+                  )}>
+                    {getActivityIcon(activity.type)}
+                  </div>
+
+                  {/* Content */}
+                  <div className={cn("bg-white rounded-lg border p-3", colors.border)}>
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className={cn("text-xs capitalize", colors.bg, colors.text)}>
+                          {activity.type.replace('_', ' ')}
+                        </Badge>
+                        {activity.direction && (
+                          <Badge variant="outline" className="text-xs">
+                            {activity.direction}
+                          </Badge>
+                        )}
+                        {activity.status && (
+                          <Badge variant="outline" className="text-xs">
+                            {activity.status}
+                          </Badge>
+                        )}
+                      </div>
+                      {timestamp && (
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                          {timestamp.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: timestamp.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+                          })}
+                          {' '}
+                          {timestamp.toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Title */}
+                    {activity.title && (
+                      <h4 className="font-medium text-gray-900 text-sm">{activity.title}</h4>
+                    )}
+
+                    {/* Body */}
+                    {activity.body && (
+                      <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap line-clamp-3">{activity.body}</p>
+                    )}
+
+                    {/* Call-specific details */}
+                    {activity.type === 'calls' && (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                        {activity.duration_seconds != null && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDuration(activity.duration_seconds)}
+                          </span>
+                        )}
+                        {activity.from_number && (
+                          <span>From: {activity.from_number}</span>
+                        )}
+                        {activity.to_number && (
+                          <span>To: {activity.to_number}</span>
+                        )}
+                        {activity.recording_url && (
+                          <a
+                            href={activity.recording_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            <Music className="w-3 h-3" />
+                            Recording
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Email-specific details */}
+                    {activity.type === 'emails' && (
+                      <div className="mt-2 text-xs text-gray-500 space-y-1">
+                        {activity.from_email && <div>From: {activity.from_email}</div>}
+                        {activity.to_email && <div>To: {activity.to_email}</div>}
+                      </div>
+                    )}
+
+                    {/* Meeting-specific details */}
+                    {activity.type === 'meetings' && (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                        {activity.start_time && activity.end_time && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {new Date(activity.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {' - '}
+                            {new Date(activity.end_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                        {activity.location && <span>Location: {activity.location}</span>}
+                        {activity.outcome && <Badge variant="outline" className="text-xs">{activity.outcome}</Badge>}
+                        {activity.meeting_link && (
+                          <a
+                            href={activity.meeting_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            <Video className="w-3 h-3" />
+                            Join
+                          </a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Task-specific details */}
+                    {activity.type === 'tasks' && (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                        {activity.priority && (
+                          <Badge variant="outline" className={cn(
+                            "text-xs",
+                            activity.priority === 'HIGH' && "border-red-300 text-red-600",
+                            activity.priority === 'MEDIUM' && "border-yellow-300 text-yellow-600",
+                            activity.priority === 'LOW' && "border-gray-300 text-gray-600"
+                          )}>
+                            {activity.priority} Priority
+                          </Badge>
+                        )}
+                        {activity.task_type && <Badge variant="outline" className="text-xs">{activity.task_type}</Badge>}
+                        {activity.completion_date && (
+                          <span>Completed: {new Date(activity.completion_date).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
+// Tasks Tab Component - CRUD for HubSpot tasks
+function TasksTab({
+  tasksData,
+  loading,
+  onFetch,
+  leadPhone,
+}: {
+  tasksData: TasksResponse | null;
+  loading: boolean;
+  onFetch: (forceRefresh?: boolean) => void;
+  leadPhone: string | null;
+}) {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingTask, setEditingTask] = useState<HubSpotTask | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  // Form state
+  const [formTitle, setFormTitle] = useState('');
+  const [formDueDate, setFormDueDate] = useState('');
+  const [formTaskType, setFormTaskType] = useState<'TODO' | 'CALL' | 'EMAIL'>('TODO');
+  const [formNotes, setFormNotes] = useState('');
+  const [formStatus, setFormStatus] = useState<'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'>('NOT_STARTED');
+  const [formPriority, setFormPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
+
+  // Fetch data on first render if not already loaded
+  useEffect(() => {
+    if (!tasksData && !loading) {
+      onFetch();
+    }
+  }, [tasksData, loading, onFetch]);
+
+  const resetForm = () => {
+    setFormTitle('');
+    setFormDueDate('');
+    setFormTaskType('TODO');
+    setFormNotes('');
+    setFormStatus('NOT_STARTED');
+    setFormPriority('MEDIUM');
+    setShowCreateForm(false);
+    setEditingTask(null);
+  };
+
+  const handleCreate = async () => {
+    if (!leadPhone || !formTitle.trim() || !formDueDate) return;
+
+    try {
+      setCreating(true);
+      const response = await fetch(`/api/crm/tasks?phone=${encodeURIComponent(leadPhone)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formTitle.trim(),
+          due_date: formDueDate,
+          task_type: formTaskType,
+          notes: formNotes.trim() || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        resetForm();
+        onFetch(true); // Force refresh to bypass cache
+      }
+    } catch (error) {
+      console.error('Error creating task:', error);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleUpdate = async (taskId: string) => {
+    try {
+      setUpdating(taskId);
+      const response = await fetch(`/api/crm/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: formTitle.trim() || undefined,
+          due_date: formDueDate || undefined,
+          task_type: formTaskType,
+          status: formStatus,
+          priority: formPriority,
+          notes: formNotes.trim() || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        resetForm();
+        onFetch(true); // Force refresh to bypass cache
+      }
+    } catch (error) {
+      console.error('Error updating task:', error);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const handleDelete = async (taskId: string) => {
+    if (!confirm('Are you sure you want to delete this task?')) return;
+
+    try {
+      setDeleting(taskId);
+      const response = await fetch(`/api/crm/tasks/${taskId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        onFetch(true); // Force refresh to bypass cache
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleMarkComplete = async (task: HubSpotTask) => {
+    try {
+      setUpdating(task.id);
+      const response = await fetch(`/api/crm/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: task.status === 'COMPLETED' ? 'NOT_STARTED' : 'COMPLETED',
+        }),
+      });
+
+      if (response.ok) {
+        onFetch(true); // Force refresh to bypass cache
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const startEditing = (task: HubSpotTask) => {
+    setEditingTask(task);
+    setFormTitle(task.title || '');
+    setFormDueDate(task.due_date ? task.due_date.split('T')[0] : '');
+    setFormTaskType((task.task_type as 'TODO' | 'CALL' | 'EMAIL') || 'TODO');
+    setFormStatus((task.status as 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED') || 'NOT_STARTED');
+    setFormPriority((task.priority as 'LOW' | 'MEDIUM' | 'HIGH') || 'MEDIUM');
+    setFormNotes(task.notes || '');
+    setShowCreateForm(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500" />
+          <p className="text-gray-500">Loading tasks...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const getTaskTypeIcon = (type: string | null | undefined) => {
+    switch (type) {
+      case 'CALL':
+        return <PhoneCall className="w-4 h-4" />;
+      case 'EMAIL':
+        return <Mail className="w-4 h-4" />;
+      default:
+        return <ListTodo className="w-4 h-4" />;
+    }
+  };
+
+  const getStatusColor = (status: string | null | undefined) => {
+    switch (status) {
+      case 'COMPLETED':
+        return 'bg-green-100 text-green-700';
+      case 'IN_PROGRESS':
+        return 'bg-blue-100 text-blue-700';
+      case 'WAITING':
+      case 'DEFERRED':
+        return 'bg-yellow-100 text-yellow-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getPriorityColor = (priority: string | null | undefined) => {
+    switch (priority) {
+      case 'HIGH':
+        return 'border-red-300 text-red-600';
+      case 'MEDIUM':
+        return 'border-yellow-300 text-yellow-600';
+      default:
+        return 'border-gray-300 text-gray-600';
+    }
+  };
+
+  return (
+    <ScrollArea className="flex-1 h-full">
+      <div className="p-4 space-y-4 pb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium text-gray-900">Tasks</h3>
+            <p className="text-xs text-gray-500">{formatNumber(tasksData?.total_count || 0)} tasks</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => onFetch(true)} className="h-8">
+              Refresh
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setShowCreateForm(true);
+                setEditingTask(null);
+                resetForm();
+              }}
+              className="h-8"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              New Task
+            </Button>
+          </div>
+        </div>
+
+        {/* Create/Edit Form */}
+        {(showCreateForm || editingTask) && (
+          <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-3">
+            <h4 className="font-medium text-gray-900">
+              {editingTask ? 'Edit Task' : 'Create New Task'}
+            </h4>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Title *</label>
+              <input
+                type="text"
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                placeholder="Task title..."
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Due Date *</label>
+                <input
+                  type="datetime-local"
+                  value={formDueDate}
+                  onChange={(e) => setFormDueDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  value={formTaskType}
+                  onChange={(e) => setFormTaskType(e.target.value as 'TODO' | 'CALL' | 'EMAIL')}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="TODO">To-Do</option>
+                  <option value="CALL">Call</option>
+                  <option value="EMAIL">Email</option>
+                </select>
+              </div>
+            </div>
+
+            {editingTask && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value as 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED')}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="NOT_STARTED">Not Started</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Priority</label>
+                  <select
+                    value={formPriority}
+                    onChange={(e) => setFormPriority(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH')}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Notes</label>
+              <textarea
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+                placeholder="Additional notes..."
+                rows={2}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={resetForm}>
+                Cancel
+              </Button>
+              {editingTask ? (
+                <Button
+                  size="sm"
+                  onClick={() => handleUpdate(editingTask.id)}
+                  disabled={updating === editingTask.id || !formTitle.trim()}
+                >
+                  {updating === editingTask.id ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : null}
+                  Save Changes
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleCreate}
+                  disabled={creating || !formTitle.trim() || !formDueDate}
+                >
+                  {creating ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : null}
+                  Create Task
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tasks List */}
+        {!tasksData || tasksData.tasks.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">
+            <ListTodo className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No tasks found</p>
+            <p className="text-sm mt-1">Create a new task to get started</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {tasksData.tasks.map((task) => {
+              const dueDate = task.due_date ? new Date(task.due_date) : null;
+              const isOverdue = dueDate && dueDate < new Date() && task.status !== 'COMPLETED';
+              const isCompleted = task.status === 'COMPLETED';
+
+              return (
+                <div
+                  key={task.id}
+                  className={cn(
+                    "bg-white rounded-lg border p-3 transition-colors",
+                    isOverdue && "border-red-200 bg-red-50",
+                    isCompleted && "opacity-60"
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Checkbox */}
+                    <button
+                      onClick={() => handleMarkComplete(task)}
+                      disabled={updating === task.id}
+                      className={cn(
+                        "mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors",
+                        isCompleted
+                          ? "bg-green-500 border-green-500 text-white"
+                          : "border-gray-300 hover:border-gray-400"
+                      )}
+                    >
+                      {updating === task.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : isCompleted ? (
+                        <CheckCircle className="w-3 h-3" />
+                      ) : null}
+                    </button>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {task.task_type && (
+                            <span className="text-gray-400 flex-shrink-0">
+                              {getTaskTypeIcon(task.task_type)}
+                            </span>
+                          )}
+                          <span className={cn(
+                            "text-sm font-medium",
+                            isCompleted && "line-through text-gray-500"
+                          )}>
+                            {task.title || 'Untitled Task'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => startEditing(task)}
+                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                            title="Edit task"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(task.id)}
+                            disabled={deleting === task.id}
+                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                            title="Delete task"
+                          >
+                            {deleting === task.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Body/Description - rendered as HTML */}
+                      {task.body && (
+                        <div
+                          className={cn(
+                            "text-sm text-gray-700 mt-2 prose prose-sm max-w-none",
+                            "[&_p]:my-1 [&_br]:leading-relaxed",
+                            isCompleted && "text-gray-500"
+                          )}
+                          dangerouslySetInnerHTML={{ __html: task.body }}
+                        />
+                      )}
+
+                      {/* Meta info */}
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {task.status && (
+                          <Badge className={cn("text-xs", getStatusColor(task.status))}>
+                            {task.status.replace('_', ' ')}
+                          </Badge>
+                        )}
+                        {task.priority && (
+                          <Badge variant="outline" className={cn("text-xs", getPriorityColor(task.priority))}>
+                            {task.priority}
+                          </Badge>
+                        )}
+                        {dueDate && (
+                          <span className={cn(
+                            "text-xs flex items-center gap-1",
+                            isOverdue ? "text-red-600" : "text-gray-500"
+                          )}>
+                            <Clock className="w-3 h-3" />
+                            {dueDate.toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {isOverdue && <span className="font-medium">(Overdue)</span>}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Created/Updated timestamps */}
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                        {task.created_at && (
+                          <span>
+                            Created: {new Date(task.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </span>
+                        )}
+                        {task.updated_at && (
+                          <span>
+                            Updated: {new Date(task.updated_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Notes */}
+                      {task.notes && (
+                        <div
+                          className="text-xs text-gray-500 mt-2 bg-gray-50 p-2 rounded border border-gray-100"
+                          dangerouslySetInnerHTML={{ __html: task.notes }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </ScrollArea>
+  );
+}
+

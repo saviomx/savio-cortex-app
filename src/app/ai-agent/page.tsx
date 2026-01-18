@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import useSWR from 'swr';
 import { Header } from '@/components/header';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -11,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Users, MessageSquare, Clock, Target, Zap } from 'lucide-react';
+import { Calendar, Users, MessageSquare, Clock, Target, Zap, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AreaChart,
@@ -50,6 +52,18 @@ interface MetricsData {
   conversionsDaily: ConversionDailyResponse;
 }
 
+// Cache duration: 1 hour (in milliseconds)
+const CACHE_DURATION = 60 * 60 * 1000;
+
+// Fetcher function for SWR
+const fetcher = async (url: string): Promise<MetricsData> => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error('Failed to load metrics');
+  }
+  return response.json();
+};
+
 function getDateRange(range: DateRange): { startDate: string; endDate: string } {
   const endDate = new Date();
   const startDate = new Date();
@@ -75,37 +89,45 @@ function getDateRange(range: DateRange): { startDate: string; endDate: string } 
   };
 }
 
-export default function MetricsPage() {
-  const [dateRange, setDateRange] = useState<DateRange>('30d');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [metrics, setMetrics] = useState<MetricsData | null>(null);
+function formatLastUpdated(date: Date | null): string {
+  if (!date) return '';
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { startDate, endDate } = getDateRange(dateRange);
-        const response = await fetch(
-          `/api/metrics?start_date=${startDate}&end_date=${endDate}&type=all`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setMetrics(data);
-        } else {
-          setError('Failed to load metrics');
-        }
-      } catch (error) {
-        console.error('Error fetching metrics:', error);
-        setError('Failed to connect to metrics API');
-      } finally {
-        setLoading(false);
-      }
-    };
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
 
-    fetchMetrics();
-  }, [dateRange]);
+export default function AIAgentPage() {
+  const [dateRange, setDateRange] = useState<DateRange>('14d');
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
+
+  const { startDate, endDate } = getDateRange(dateRange);
+  const apiUrl = `/api/metrics?start_date=${startDate}&end_date=${endDate}&type=all`;
+
+  const { data: metrics, error, isLoading, isValidating, mutate } = useSWR<MetricsData>(
+    apiUrl,
+    fetcher,
+    {
+      dedupingInterval: CACHE_DURATION,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      revalidateIfStale: false,
+      onSuccess: () => {
+        setLastFetched(new Date());
+      },
+    }
+  );
+
+  const handleRefresh = () => {
+    mutate();
+  };
+
+  const loading = isLoading;
 
   // Calculate funnel totals from the data
   const funnelTotals = useMemo(() => {
@@ -152,20 +174,40 @@ export default function MetricsPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
-      <Header activeTab="metrics" />
+      <Header activeTab="ai-agent" />
 
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Page Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Metrics Dashboard</h1>
+              <h1 className="text-2xl font-bold text-gray-900">AI Agent Dashboard</h1>
               <p className="text-gray-500">Track conversion performance and messaging metrics</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* Last Updated & Refresh */}
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                {lastFetched && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    {formatLastUpdated(lastFetched)}
+                  </span>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={isValidating}
+                  className="gap-1.5"
+                >
+                  <RefreshCw className={cn('w-4 h-4', isValidating && 'animate-spin')} />
+                  Refresh
+                </Button>
+              </div>
+
               <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-                <SelectTrigger className="w-[140px]">
+                <SelectTrigger className="w-[180px]">
                   <Calendar className="w-4 h-4 mr-2" />
                   <SelectValue />
                 </SelectTrigger>
@@ -182,7 +224,7 @@ export default function MetricsPage() {
           {/* Error Display */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-              {error}
+              {error.message || 'Failed to load metrics'}
             </div>
           )}
 
@@ -561,4 +603,3 @@ function RateCard({
     </div>
   );
 }
-

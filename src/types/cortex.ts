@@ -296,6 +296,126 @@ export interface HubSpotLinksResponse {
 }
 
 // =============================================================================
+// Marketing Attribution Types
+// =============================================================================
+
+/**
+ * Marketing attribution data from HubSpot.
+ * Contains first touch, last touch, and UTM tracking information.
+ * Uses index signature for dynamic attribution fields that may vary by HubSpot configuration.
+ */
+export interface MarketingAttribution {
+  // Original source tracking (first touch)
+  original_source?: string | null;
+  original_source_drill_down_1?: string | null;
+  original_source_drill_down_2?: string | null;
+
+  // Latest source tracking
+  latest_source?: string | null;
+  latest_source_drill_down_1?: string | null;
+  latest_source_drill_down_2?: string | null;
+
+  // First touch data
+  first_conversion_event?: string | null;
+  first_conversion_date?: string | null;
+  first_url?: string | null;
+  first_referrer?: string | null;
+  first_touch_campaign?: string | null;
+  last_touch_campaign?: string | null;
+
+  // UTM parameters
+  utm_source?: string | null;
+  utm_medium?: string | null;
+  utm_campaign?: string | null;
+  utm_term?: string | null;
+  utm_content?: string | null;
+
+  // Conversion count
+  num_conversions?: number | null;
+
+  // Allow any additional dynamic attribution fields
+  [key: string]: string | number | null | undefined;
+}
+
+// =============================================================================
+// Full Contact Types (Dynamic Properties)
+// =============================================================================
+
+/**
+ * HubSpot contact properties - ALL properties are dynamic.
+ * Index signature allows for any HubSpot property including custom fields.
+ * Values can be strings, numbers, booleans, or null.
+ */
+export type HubSpotContactProperties = Record<string, string | number | boolean | null | undefined>;
+
+/**
+ * Full contact response from /crm/contact/full endpoint.
+ * Contains all HubSpot properties (including custom fields),
+ * marketing attribution, and related entity references.
+ */
+export interface FullContactResponse {
+  phone?: string | null;
+  has_contact: boolean;
+  contact_id: string;
+  properties: HubSpotContactProperties;
+  marketing_attribution?: MarketingAttribution | null;
+  company_ids?: string[];
+  hubspot_link?: string | null;
+}
+
+// =============================================================================
+// Form Submission Types
+// =============================================================================
+
+/**
+ * Individual field value from a form submission.
+ * Fields are dynamic based on the form configuration in HubSpot.
+ */
+export interface FormFieldValue {
+  name: string;
+  value: string;
+  label?: string | null;
+}
+
+/**
+ * Form submission with metadata and field values.
+ * Represents a single form submission from a contact.
+ */
+export interface FormSubmission {
+  form_id: string;
+  form_name?: string | null;
+  submitted_at?: string | null;
+  page_url?: string | null;
+  page_title?: string | null;
+
+  // Dynamic form field values
+  values: FormFieldValue[];
+
+  // Campaign attribution (if form was tied to a campaign)
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+
+  // Portal/submission metadata
+  portal_id?: string | null;
+  submission_id?: string | null;
+
+  // HubSpot form link
+  hubspot_form_link?: string | null;
+}
+
+/**
+ * Response wrapper for /crm/contact/form-submissions endpoint.
+ * Contains all form submissions for a contact.
+ */
+export interface FormSubmissionsResponse {
+  contact_id: string;
+  phone?: string | null;
+  email?: string | null;
+  submissions: FormSubmission[];
+  total_count: number;
+}
+
+// =============================================================================
 // Metrics Types
 // =============================================================================
 
@@ -392,6 +512,75 @@ export interface ConversionDailyResponse {
 }
 
 // =============================================================================
+// CRM Funnel Metrics Types
+// =============================================================================
+
+/**
+ * Individual step showing conversion between two funnel stages.
+ * Used in CRMConversionRatesResponse.steps array.
+ */
+export interface StepConversionRate {
+  from_stage: string;
+  to_stage: string;
+  from_count: number;
+  to_count: number;
+  conversion_rate: number;
+}
+
+/**
+ * Response from /metrics/crm/conversion-rates endpoint.
+ * Contains step-by-step conversion rates through the funnel.
+ */
+export interface CRMConversionRatesResponse {
+  start_date: string;
+  end_date: string;
+  lead_to_conversation: number;
+  conversation_to_reply: number;
+  reply_to_qualified: number;
+  qualified_to_demo_scheduled: number;
+  demo_scheduled_to_product_explored: number;
+  product_explored_to_closed: number | null;
+  overall_conversion: number;
+  steps: StepConversionRate[];
+}
+
+/**
+ * A single stage in the CRM funnel.
+ * Used in CRMFunnelVolumeResponse.stages array.
+ */
+export interface FunnelStage {
+  name: string;
+  count: number;
+  percentage: number | null;
+}
+
+/**
+ * Response from /metrics/crm/funnel-volume endpoint.
+ * Contains aggregate counts at each funnel stage.
+ */
+export interface CRMFunnelVolumeResponse {
+  start_date: string;
+  end_date: string;
+  leads_created: number;
+  conversations_started: number;
+  replies_received: number;
+  qualified_leads: number;
+  demo_scheduled: number;
+  product_explored: number;
+  closed_converted: number | null;
+  stages: FunnelStage[];
+}
+
+/**
+ * Combined CRM metrics response for the metrics page.
+ * Includes both funnel volume and conversion rates.
+ */
+export interface CRMMetricsResponse {
+  volume: CRMFunnelVolumeResponse;
+  conversions: CRMConversionRatesResponse;
+}
+
+// =============================================================================
 // Auth Types
 // =============================================================================
 
@@ -467,6 +656,149 @@ export interface LeadTag {
 }
 
 // =============================================================================
+// Activity Timeline Types (HubSpot)
+// =============================================================================
+
+/**
+ * Activity item in the contact timeline.
+ * Represents a single engagement (note, call, email, meeting, or task).
+ */
+export interface ActivityItem {
+  id: string;
+  type: 'notes' | 'calls' | 'emails' | 'meetings' | 'tasks';
+  timestamp?: string | null;
+  owner_id?: string | null;
+  title?: string | null;
+  body?: string | null;
+  icon?: string | null;
+  // Call-specific fields
+  direction?: 'INBOUND' | 'OUTBOUND' | string | null;
+  status?: string | null;
+  duration_seconds?: number | null;
+  from_number?: string | null;
+  to_number?: string | null;
+  recording_url?: string | null;
+  // Email-specific fields
+  from_email?: string | null;
+  to_email?: string | null;
+  // Meeting-specific fields
+  start_time?: string | null;
+  end_time?: string | null;
+  location?: string | null;
+  outcome?: string | null;
+  meeting_link?: string | null;
+  // Task-specific fields
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | string | null;
+  task_type?: 'TODO' | 'CALL' | 'EMAIL' | string | null;
+  completion_date?: string | null;
+}
+
+/**
+ * Response from /crm/contact/activity endpoint.
+ */
+export interface ContactActivityResponse {
+  phone?: string | null;
+  contact_id?: string | null;
+  activities: ActivityItem[];
+  total_count: number;
+  activity_counts?: Record<string, number>;
+  hubspot_link?: string | null;
+}
+
+// =============================================================================
+// HubSpot Task Types
+// =============================================================================
+
+/**
+ * HubSpot task information.
+ */
+export interface HubSpotTask {
+  id: string;
+  title?: string | null;
+  body?: string | null;
+  due_date?: string | null;
+  status?: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'WAITING' | 'DEFERRED' | string | null;
+  task_type?: 'TODO' | 'CALL' | 'EMAIL' | string | null;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | string | null;
+  owner_id?: string | null;
+  notes?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/**
+ * Response from /crm/tasks GET endpoint.
+ */
+export interface TasksResponse {
+  conversation_id?: number | null;
+  phone?: string | null;
+  contact_id?: string | null;
+  tasks: HubSpotTask[];
+  total_count: number;
+}
+
+/**
+ * Request to create a task.
+ */
+export interface CreateTaskRequest {
+  title: string;
+  due_date: string;
+  task_type?: 'TODO' | 'CALL' | 'EMAIL';
+  notes?: string | null;
+}
+
+/**
+ * Response after creating a task.
+ */
+export interface CreateTaskResponse {
+  success: boolean;
+  task?: HubSpotTask | null;
+  error?: string | null;
+}
+
+/**
+ * Request to update a task.
+ */
+export interface UpdateTaskRequest {
+  title?: string | null;
+  due_date?: string | null;
+  status?: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'WAITING' | 'DEFERRED';
+  task_type?: 'TODO' | 'CALL' | 'EMAIL';
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH';
+  owner_id?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Response after updating a task.
+ */
+export interface UpdateTaskResponse {
+  success: boolean;
+  task_id: string;
+  updated_properties?: string[];
+  task?: HubSpotTask | null;
+  error?: string | null;
+}
+
+/**
+ * Response after deleting a task.
+ */
+export interface DeleteTaskResponse {
+  success: boolean;
+  task_id: string;
+  error?: string | null;
+}
+
+/**
+ * Response for getting a single task.
+ */
+export interface GetTaskResponse {
+  task?: HubSpotTask | null;
+  has_task: boolean;
+  hubspot_link?: string | null;
+}
+
+// =============================================================================
 // Qualification Types
 // =============================================================================
 
@@ -501,4 +833,108 @@ export interface ConversationSummaryResponse {
   has_meeting: boolean;
   created_at?: string | null;
   updated_at?: string | null;
+}
+
+// =============================================================================
+// AI Architecture Types
+// =============================================================================
+
+/**
+ * Prompt category enum - classifies prompts by their function in the agent system.
+ */
+export type PromptCategory =
+  | 'system'
+  | 'qualification'
+  | 'data_gathering'
+  | 'scheduling'
+  | 'terminal'
+  | 'routing'
+  | 'detection';
+
+/**
+ * Agent node identifiers in the multi-agent system.
+ */
+export type AgentNode =
+  | 'orchestrator'
+  | 'qa_agent'
+  | 'data_gathering_agent'
+  | 'qualification_agent'
+  | 'scheduling_agent'
+  | 'global';
+
+/**
+ * Response from /ai/diagram endpoint.
+ * Contains the Mermaid diagram and graph structure.
+ * Nodes and edges are generic objects as per API spec.
+ */
+export interface DiagramResponse {
+  diagram: string;
+  format: string;
+  nodes: Record<string, unknown>[];
+  edges: Record<string, unknown>[];
+}
+
+/**
+ * Prompt metadata (summary info without full content).
+ */
+export interface PromptMetadata {
+  id: string;
+  name: string;
+  description: string;
+  category: PromptCategory;
+  nodes: AgentNode[];
+  file_path: string;
+  variables?: string[];
+}
+
+/**
+ * Full prompt details including content.
+ */
+export interface PromptDetail extends PromptMetadata {
+  content: string;
+  line_count: number;
+  char_count: number;
+}
+
+/**
+ * Response from /ai/prompts endpoint.
+ */
+export interface PromptListResponse {
+  total: number;
+  prompts: PromptMetadata[];
+}
+
+/**
+ * Detailed node information.
+ */
+export interface NodeDetail {
+  id: string;
+  name: string;
+  description: string;
+  responsibilities: string[];
+  inputs: string[];
+  outputs: string[];
+  prompts?: string[];
+  required_fields?: string[] | null;
+  labels?: string[] | null;
+}
+
+/**
+ * Response from /ai/nodes endpoint.
+ */
+export interface NodeListResponse {
+  total: number;
+  nodes: NodeDetail[];
+}
+
+/**
+ * Complete architecture response from /ai/architecture endpoint.
+ * Uses generic objects for flexible schema as per API spec.
+ */
+export interface AgentArchitectureResponse {
+  diagram: string;
+  nodes: Record<string, unknown>[];
+  prompts_summary: Record<string, unknown>[];
+  state_fields: Record<string, string>[];
+  node_id_mapping?: Record<string, string>;
 }
