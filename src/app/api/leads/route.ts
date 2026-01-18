@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getCortexClient } from '@/lib/cortex-client';
-import { formatTimeAgo } from '@/lib/utils/date';
 import type { ConversationSearchItem, LeadStatus } from '@/types/cortex';
 
 /**
@@ -70,7 +69,6 @@ export async function GET(request: Request) {
       last_message_at: item.last_message_at || item.updated_at,
       window_status: item.window_status,
       displayName: item.client_name || item.client_phone || `Lead #${item.id}`,
-      timeAgo: formatTimeAgo(item.last_message_at || item.updated_at),
       priority: item.state === 1 ? 'urgent' as const : 'normal' as const,
     }));
 
