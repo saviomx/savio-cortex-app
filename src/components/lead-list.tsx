@@ -8,13 +8,13 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn, formatNumber } from '@/lib/utils';
+import { formatTimeAgo } from '@/lib/utils/date';
 import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
 import type { LeadStatus, WindowStatus } from '@/components/lead-sidebar';
 import type { ConversationSearchItem } from '@/types/cortex';
 
 interface Lead extends ConversationSearchItem {
   displayName: string;
-  timeAgo: string;
   priority: 'urgent' | 'normal';
   last_message_content?: string | null;
   last_message_role?: string | null;
@@ -290,7 +290,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
 
                     {/* Time */}
                     <span className="text-xs text-gray-400 flex-shrink-0">
-                      {lead.timeAgo}
+                      {formatTimeAgo(lead.last_message_at || lead.updated_at)}
                     </span>
                   </div>
                 </button>
