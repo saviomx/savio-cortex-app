@@ -18,7 +18,6 @@ interface LeadSidebarProps {
   onDateChange?: (dateFrom: string | null, dateTo: string | null) => void;
   windowStatus?: WindowStatus;
   onWindowStatusChange?: (status: WindowStatus) => void;
-  windowCounts?: { open: number; expired: number };
   className?: string;
 }
 
@@ -78,7 +77,6 @@ export const LeadSidebar = memo(function LeadSidebar({
   onDateChange,
   windowStatus = 'all',
   onWindowStatusChange,
-  windowCounts,
   className,
 }: LeadSidebarProps) {
   const [showDateFilter, setShowDateFilter] = useState(false);

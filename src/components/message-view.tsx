@@ -390,12 +390,14 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
                     {message.hasMedia && message.mediaData?.url ? (
                       <div className="mb-2">
                         {message.messageType === 'sticker' ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={message.mediaData.url}
                             alt="Sticker"
                             className="max-w-[150px] max-h-[150px] h-auto"
                           />
                         ) : message.mediaData.contentType?.startsWith('image/') || message.messageType === 'image' ? (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={message.mediaData.url}
                             alt="Media"
@@ -503,6 +505,7 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
               <div className="p-3 border-b border-[#d1d7db] bg-white">
                 <div className="flex items-start gap-3">
                   {filePreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded" />
                   ) : (
                     <div className="w-16 h-16 bg-[#f0f2f5] rounded flex items-center justify-center">

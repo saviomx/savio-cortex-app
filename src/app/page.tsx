@@ -9,7 +9,6 @@ import type { ConversationSearchItem } from '@/types/cortex';
 
 interface SelectedLead extends ConversationSearchItem {
   displayName: string;
-  timeAgo: string;
 }
 
 export default function Home() {
