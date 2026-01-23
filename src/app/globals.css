@@ -133,3 +133,12 @@
   width: 100% !important;
   min-width: 0 !important;
 }
+
+/* Hide scrollbar for horizontal scroll tabs */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

@@ -58,13 +58,18 @@ export default function Home() {
     leadListRef.current?.refresh();
   }, []);
 
+  // Mobile back handler - clears selected lead to show list
+  const handleMobileBack = useCallback(() => {
+    setSelectedLead(null);
+  }, []);
+
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
       {/* Top Header */}
       <Header activeTab="inbox" />
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Content - pb-14 on mobile for bottom nav */}
+      <div className="flex-1 flex overflow-hidden pb-14 md:pb-0">
         {/* Left Sidebar - Categories */}
         <LeadSidebar
           selectedCategory={selectedCategory}
@@ -78,6 +83,7 @@ export default function Home() {
         />
 
         {/* Middle Panel - Lead List */}
+        {/* On mobile: show only when no lead selected. On desktop: always show */}
         <LeadList
           ref={leadListRef}
           selectedCategory={selectedCategory}
@@ -86,17 +92,22 @@ export default function Home() {
           windowStatus={windowStatus}
           selectedLeadId={selectedLead?.external_id || (selectedLead?.id ? String(selectedLead.id) : null)}
           onSelectLead={handleSelectLead}
-          className="w-80 flex-shrink-0 min-h-0"
+          onCategoryChange={handleCategoryChange}
+          onDateChange={handleDateChange}
+          onWindowStatusChange={handleWindowStatusChange}
+          className={`w-full md:w-80 flex-shrink-0 min-h-0 ${selectedLead ? 'hidden md:flex' : 'flex'}`}
         />
 
         {/* Right Panel - Chat */}
+        {/* On mobile: show only when lead selected. On desktop: always show */}
         <ChatPanel
           leadId={selectedLead?.external_id || (selectedLead?.id ? String(selectedLead.id) : null)}
           leadName={selectedLead?.displayName || selectedLead?.client_name || undefined}
           leadCompany={selectedLead?.client_company || undefined}
           leadPhone={selectedLead?.client_phone || undefined}
           onLeadUpdate={handleLeadUpdate}
-          className="flex-1 min-w-0 min-h-0"
+          onMobileBack={handleMobileBack}
+          className={`flex-1 min-w-0 min-h-0 ${selectedLead ? 'flex' : 'hidden md:flex'}`}
         />
       </div>
     </div>
