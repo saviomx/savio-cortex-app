@@ -10,7 +10,7 @@ const CORTEX_API_KEY = process.env.CORTEX_API_KEY;
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { to, templateName, languageCode, parameters, parameterInfo } = body;
+    const { to, templateName, languageCode, parameters } = body;
 
     if (!to || !templateName) {
       return NextResponse.json(

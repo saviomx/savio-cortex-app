@@ -23,7 +23,7 @@ import {
   ChevronUp,
   Check,
   Upload,
-  Image,
+  Image as ImageIcon,
   Video,
   File,
   X,
@@ -1498,7 +1498,7 @@ export default function SettingsPage() {
                     <span className="flex items-center gap-2"><FileText className="w-4 h-4" /> Text</span>
                   </SelectItem>
                   <SelectItem value="IMAGE">
-                    <span className="flex items-center gap-2"><Image className="w-4 h-4" /> Image</span>
+                    <span className="flex items-center gap-2"><ImageIcon className="w-4 h-4" /> Image</span>
                   </SelectItem>
                   <SelectItem value="VIDEO">
                     <span className="flex items-center gap-2"><Video className="w-4 h-4" /> Video</span>
