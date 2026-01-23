@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback, forwardRef, useImperativeHandle, memo, useRef } from 'react';
-import { Search, AlertTriangle, Bot, User, Loader2 } from 'lucide-react';
+import { Search, AlertTriangle, Bot, User, Loader2, SlidersHorizontal, Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, X, MessageCircle, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { cn, formatNumber } from '@/lib/utils';
 import { formatTimeAgo } from '@/lib/utils/date';
 import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
@@ -28,14 +29,29 @@ interface LeadListProps {
   selectedLeadId: string | null;
   onSelectLead: (lead: Lead | null) => void;
   className?: string;
+  // Mobile filter props
+  onCategoryChange?: (category: LeadStatus) => void;
+  onDateChange?: (from: string | null, to: string | null) => void;
+  onWindowStatusChange?: (status: WindowStatus) => void;
 }
+
+// Category items for mobile filter
+const categories: { id: LeadStatus; label: string; icon: React.ElementType; color?: string }[] = [
+  { id: 'all', label: 'All Leads', icon: Inbox },
+  { id: 'new_leads', label: 'New Leads', icon: UserPlus },
+  { id: 'conversing', label: 'Conversing', icon: MessageSquare },
+  { id: 'qualified', label: 'Qualified', icon: CheckCircle, color: 'text-green-600' },
+  { id: 'demo', label: 'Demo Scheduled', icon: Calendar, color: 'text-blue-600' },
+  { id: 'demo_today', label: 'Demo Today', icon: CalendarClock, color: 'text-purple-600' },
+  { id: 'manual_mode', label: 'Manual Mode', icon: AlertCircle, color: 'text-red-600' },
+];
 
 export interface LeadListRef {
   refresh: () => void;
 }
 
 export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function LeadList(
-  { selectedCategory, dateFrom, dateTo, windowStatus, selectedLeadId, onSelectLead, className },
+  { selectedCategory, dateFrom, dateTo, windowStatus, selectedLeadId, onSelectLead, className, onCategoryChange, onDateChange, onWindowStatusChange },
   ref
 ) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -45,6 +61,12 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+
+  // Mobile filter state
+  const [showMobileDateFilter, setShowMobileDateFilter] = useState(false);
+  const [mobileDateFrom, setMobileDateFrom] = useState<string>(dateFrom || '');
+  const [mobileDateTo, setMobileDateTo] = useState<string>(dateTo || '');
+  const [mobileFilterSheetOpen, setMobileFilterSheetOpen] = useState(false);
 
   // Store filter params in refs for stable callback
   const filtersRef = useRef({ selectedCategory, searchQuery, dateFrom, dateTo, windowStatus });
@@ -158,13 +180,119 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
     );
   };
 
+  const hasDateFilter = dateFrom || dateTo;
+
+  const handleApplyMobileDateFilter = () => {
+    onDateChange?.(mobileDateFrom || null, mobileDateTo || null);
+    setShowMobileDateFilter(false);
+  };
+
+  const handleClearMobileDateFilter = () => {
+    setMobileDateFrom('');
+    setMobileDateTo('');
+    onDateChange?.(null, null);
+    setShowMobileDateFilter(false);
+  };
+
   return (
     <div className={cn('flex flex-col h-full overflow-hidden bg-white border-r border-gray-200', className)}>
       {/* Header */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">{getCategoryLabel(selectedCategory)}</h2>
-          <span className="text-sm text-gray-500">{formatNumber(totalCount)} leads</span>
+          {/* Desktop: Static category label */}
+          <h2 className="hidden md:block font-semibold text-gray-900">{getCategoryLabel(selectedCategory)}</h2>
+
+          {/* Mobile: Category selector with filter button */}
+          <div className="flex md:hidden items-center gap-2 flex-1">
+            <Sheet open={mobileFilterSheetOpen} onOpenChange={setMobileFilterSheetOpen}>
+              <SheetTrigger asChild>
+                <button className="flex items-center gap-2 font-semibold text-gray-900">
+                  {getCategoryLabel(selectedCategory)}
+                  <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="h-[70vh] rounded-t-xl">
+                <SheetHeader>
+                  <SheetTitle>Filters</SheetTitle>
+                </SheetHeader>
+                <div className="px-4 space-y-6 overflow-y-auto pb-6 flex-1">
+                  {/* Category Selection */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Category</h3>
+                    <div className="space-y-1">
+                      {categories.map((category) => {
+                        const Icon = category.icon;
+                        const isSelected = selectedCategory === category.id;
+                        return (
+                          <button
+                            key={category.id}
+                            onClick={() => {
+                              onCategoryChange?.(category.id);
+                              setMobileFilterSheetOpen(false);
+                            }}
+                            className={cn(
+                              'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors',
+                              isSelected ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50',
+                              category.color
+                            )}
+                          >
+                            <Icon className={cn('w-4 h-4', isSelected ? 'text-blue-600' : 'text-gray-400', category.color)} />
+                            <span className={cn('text-sm', isSelected && 'font-medium')}>{category.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Date Filter */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Date Range</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">From</label>
+                        <Input
+                          type="date"
+                          value={mobileDateFrom}
+                          onChange={(e) => setMobileDateFrom(e.target.value)}
+                          className="h-10"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 block mb-1">To</label>
+                        <Input
+                          type="date"
+                          value={mobileDateTo}
+                          onChange={(e) => setMobileDateTo(e.target.value)}
+                          className="h-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <SheetFooter className="border-t">
+                  <div className="flex gap-2 w-full">
+                    <Button variant="outline" className="flex-1" onClick={handleClearMobileDateFilter}>
+                      Clear
+                    </Button>
+                    <Button className="flex-1" onClick={handleApplyMobileDateFilter}>
+                      Apply
+                    </Button>
+                  </div>
+                </SheetFooter>
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Date filter indicator (mobile) */}
+            {hasDateFilter && (
+              <Badge variant="secondary" className="md:hidden text-xs bg-blue-50 text-blue-700">
+                <CalendarDays className="w-3 h-3 mr-1" />
+                Filtered
+              </Badge>
+            )}
+            <span className="text-sm text-gray-500">{formatNumber(totalCount)} leads</span>
+          </div>
         </div>
 
         {/* Search */}
@@ -178,6 +306,49 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
             className="pl-9 h-9"
           />
         </div>
+
+        {/* Chat Window Filter - Mobile only */}
+        {onWindowStatusChange && (
+          <div className="md:hidden mt-3">
+            <div className="flex rounded-lg bg-gray-100 p-1">
+              <button
+                onClick={() => onWindowStatusChange('all')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  windowStatus === 'all'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                All
+              </button>
+              <button
+                onClick={() => onWindowStatusChange('open')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  windowStatus === 'open'
+                    ? 'bg-white text-green-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                <MessageCircle className="w-3 h-3" />
+                Open
+              </button>
+              <button
+                onClick={() => onWindowStatusChange('expired')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  windowStatus === 'expired'
+                    ? 'bg-white text-amber-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                )}
+              >
+                <Clock className="w-3 h-3" />
+                Expired
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Lead List */}

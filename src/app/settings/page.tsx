@@ -30,6 +30,7 @@ import {
   Link,
   AlertCircle,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
@@ -162,7 +163,7 @@ type SectionType = 'profile' | 'phone-numbers' | 'templates' | 'users';
 const ROLES = ['admin', 'sdr', 'manager'];
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const [activeSection, setActiveSection] = useState<SectionType>('profile');
@@ -619,11 +620,69 @@ export default function SettingsPage() {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950">
       <Header activeTab="settings" />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden pb-14 md:pb-0">
+        {/* Mobile Tabs */}
+        <div className="md:hidden border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="flex overflow-x-auto px-2 py-2 gap-2 no-scrollbar">
+            <button
+              onClick={() => setActiveSection('profile')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                activeSection === 'profile'
+                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              )}
+            >
+              <Building2 className="w-4 h-4" />
+              Profile
+            </button>
+            <button
+              onClick={() => setActiveSection('phone-numbers')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                activeSection === 'phone-numbers'
+                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              )}
+            >
+              <Phone className="w-4 h-4" />
+              Phones
+            </button>
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => setActiveSection('templates')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                    activeSection === 'templates'
+                      ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                  )}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Templates
+                </button>
+                <button
+                  onClick={() => setActiveSection('users')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                    activeSection === 'users'
+                      ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                  )}
+                >
+                  <Users className="w-4 h-4" />
+                  Users
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop Sidebar */}
+        <div className="hidden md:flex md:flex-col w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Settings</h2>
-          <nav className="space-y-1">
+          <nav className="space-y-1 flex-1">
             <button
               onClick={() => setActiveSection('profile')}
               className={cn(
@@ -691,34 +750,37 @@ export default function SettingsPage() {
               {/* Business Profile Section */}
               {activeSection === 'profile' && (
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                      <h1 className="text-2xl font-bold text-gray-900">Business Profile</h1>
+                      <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Business Profile</h1>
                       <p className="text-gray-500 text-sm mt-1">
-                        Manage your WhatsApp Business profile information
+                        Manage your WhatsApp Business profile
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
+                        size="sm"
                         onClick={fetchProfile}
                         disabled={loadingProfile}
                       >
-                        <RefreshCw className={cn('w-4 h-4 mr-2', loadingProfile && 'animate-spin')} />
-                        Refresh
+                        <RefreshCw className={cn('w-4 h-4 sm:mr-2', loadingProfile && 'animate-spin')} />
+                        <span className="hidden sm:inline">Refresh</span>
                       </Button>
                       <Button
+                        size="sm"
                         onClick={handleSaveProfile}
                         disabled={savingProfile}
                       >
                         {savingProfile ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          <Loader2 className="w-4 h-4 sm:mr-2 animate-spin" />
                         ) : profileSaved ? (
-                          <CheckCircle className="w-4 h-4 mr-2" />
+                          <CheckCircle className="w-4 h-4 sm:mr-2" />
                         ) : (
-                          <Save className="w-4 h-4 mr-2" />
+                          <Save className="w-4 h-4 sm:mr-2" />
                         )}
-                        {profileSaved ? 'Saved!' : 'Save Changes'}
+                        <span className="hidden sm:inline">{profileSaved ? 'Saved!' : 'Save Changes'}</span>
+                        <span className="sm:hidden">{profileSaved ? 'Saved!' : 'Save'}</span>
                       </Button>
                     </div>
                   </div>
@@ -877,15 +939,16 @@ export default function SettingsPage() {
               {/* Phone Numbers Section */}
               {activeSection === 'phone-numbers' && (
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                      <h1 className="text-2xl font-bold text-gray-900">Phone Numbers</h1>
+                      <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Phone Numbers</h1>
                       <p className="text-gray-500 text-sm mt-1">
                         Manage your WhatsApp Business phone numbers
                       </p>
                     </div>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={fetchPhoneNumbers}
                       disabled={loadingPhones}
                     >
@@ -921,14 +984,14 @@ export default function SettingsPage() {
                     <div className="space-y-4">
                       {phoneNumbers.map((phone) => (
                         <Card key={phone.id}>
-                          <CardContent className="py-6">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-start gap-4">
-                                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                                  <Phone className="w-6 h-6 text-green-600" />
+                          <CardContent className="py-4 sm:py-6">
+                            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                              <div className="flex items-start gap-3 sm:gap-4">
+                                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                  <Phone className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                                 </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <p className="font-semibold text-gray-900">
                                       {phone.display_phone_number || phone.id}
                                     </p>
@@ -940,11 +1003,11 @@ export default function SettingsPage() {
                                     )}
                                   </div>
                                   {phone.verified_name && (
-                                    <p className="text-sm text-gray-600 mt-0.5">
+                                    <p className="text-sm text-gray-600 mt-0.5 truncate">
                                       {phone.verified_name}
                                     </p>
                                   )}
-                                  <div className="flex items-center gap-2 mt-2">
+                                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2">
                                     {getQualityBadge(phone.quality_rating)}
                                     {getVerificationBadge(phone.code_verification_status)}
                                     {phone.messaging_limit_tier && (
@@ -996,31 +1059,35 @@ export default function SettingsPage() {
               {/* WhatsApp Templates Section (Admin only) */}
               {activeSection === 'templates' && isAdmin && (
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                      <h1 className="text-2xl font-bold text-gray-900">WhatsApp Templates</h1>
+                      <h1 className="text-xl sm:text-2xl font-bold text-gray-900">WhatsApp Templates</h1>
                       <p className="text-gray-500 text-sm mt-1">
-                        Manage WhatsApp message templates for outbound messaging
+                        Manage WhatsApp message templates
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
+                        size="sm"
                         onClick={handleSyncTemplates}
                         disabled={syncingTemplates}
+                        className="flex-1 sm:flex-none"
                       >
-                        <RefreshCw className={cn('w-4 h-4 mr-2', syncingTemplates && 'animate-spin')} />
-                        Sync from Meta
+                        <RefreshCw className={cn('w-4 h-4 sm:mr-2', syncingTemplates && 'animate-spin')} />
+                        <span className="hidden sm:inline">Sync from Meta</span>
+                        <span className="sm:hidden">Sync</span>
                       </Button>
-                      <Button onClick={() => setShowCreateTemplate(true)}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Template
+                      <Button size="sm" onClick={() => setShowCreateTemplate(true)} className="flex-1 sm:flex-none">
+                        <Plus className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Create Template</span>
+                        <span className="sm:hidden">Create</span>
                       </Button>
                     </div>
                   </div>
 
                   {/* Status Tabs */}
-                  <div className="flex border-b border-gray-200">
+                  <div className="flex border-b border-gray-200 overflow-x-auto no-scrollbar">
                     <button
                       onClick={() => setTemplateStatusTab('APPROVED')}
                       className={cn(
@@ -1100,14 +1167,14 @@ export default function SettingsPage() {
                         <Card key={template.id}>
                           <CardContent className="py-4">
                             <div
-                              className="flex items-start justify-between cursor-pointer"
+                              className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 cursor-pointer"
                               onClick={() => setExpandedTemplate(
                                 expandedTemplate === template.id ? null : template.id
                               )}
                             >
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-gray-900">{template.name}</p>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 truncate">{template.name}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                   {getTemplateBadge(template.status)}
                                   <Badge variant="outline" className="text-xs">
                                     {template.category}
@@ -1116,11 +1183,11 @@ export default function SettingsPage() {
                                     {template.language}
                                   </Badge>
                                 </div>
-                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                <p className="text-sm text-gray-600 mt-2 line-clamp-2">
                                   {template.body_text}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-shrink-0">
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1185,15 +1252,16 @@ export default function SettingsPage() {
               {/* User Management Section (Admin only) */}
               {activeSection === 'users' && isAdmin && (
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                      <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+                      <h1 className="text-xl sm:text-2xl font-bold text-gray-900">User Management</h1>
                       <p className="text-gray-500 text-sm mt-1">
                         Manage user accounts and permissions
                       </p>
                     </div>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={fetchUsers}
                       disabled={loadingUsers}
                     >
@@ -1230,11 +1298,11 @@ export default function SettingsPage() {
                       {users.map((u) => (
                         <Card key={u.id}>
                           <CardContent className="py-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                              <div className="flex items-center gap-3 min-w-0">
                                 <div
                                   className={cn(
-                                    'h-10 w-10 rounded-full flex items-center justify-center',
+                                    'h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0',
                                     u.is_active ? 'bg-green-100' : 'bg-gray-100'
                                   )}
                                 >
@@ -1244,8 +1312,8 @@ export default function SettingsPage() {
                                     <UserX className="w-5 h-5 text-gray-400" />
                                   )}
                                 </div>
-                                <div>
-                                  <p className="font-semibold text-gray-900">{u.email}</p>
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-gray-900 truncate">{u.email}</p>
                                   <div className="flex items-center gap-2 mt-1">
                                     <Badge
                                       className={cn(
@@ -1272,7 +1340,7 @@ export default function SettingsPage() {
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-shrink-0">
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1307,6 +1375,25 @@ export default function SettingsPage() {
                   )}
                 </div>
               )}
+
+              {/* Mobile Logout Section */}
+              <div className="md:hidden mt-8 pt-6 border-t border-gray-200 dark:border-gray-800">
+                <div className="space-y-4">
+                  {user && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Logged in as <span className="font-medium text-gray-900 dark:text-white">{user.email}</span>
+                    </div>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={logout}
+                    className="w-full justify-center text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-950"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Log Out
+                  </Button>
+                </div>
+              </div>
             </div>
           </ScrollArea>
         </div>
@@ -1317,18 +1404,18 @@ export default function SettingsPage() {
         setShowCreateTemplate(open);
         if (!open) resetTemplateForm();
       }}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-[700px] max-h-[85vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Create New Template</DialogTitle>
-            <DialogDescription>
-              Create a new WhatsApp message template. Templates must be approved by Meta before use.
+            <DialogTitle className="text-lg sm:text-xl">Create New Template</DialogTitle>
+            <DialogDescription className="text-sm">
+              Create a new WhatsApp message template.
               <span className="flex items-center gap-1 mt-1 text-blue-600">
                 <Sparkles className="w-3 h-3" />
-                Leave category and language empty for smart auto-detection
+                Leave category/language empty for auto-detection
               </span>
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2 sm:py-4">
             {/* Template Name */}
             <div>
               <label className="text-sm font-medium">Template Name *</label>
@@ -1344,7 +1431,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Category and Language */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium flex items-center gap-1">
                   Category
@@ -1524,20 +1611,20 @@ export default function SettingsPage() {
               if (uniqueParams.length === 0) return null;
 
               return (
-                <div className="border rounded-lg p-4 space-y-3 bg-blue-50/50">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-blue-600" />
+                <div className="border rounded-lg p-3 sm:p-4 space-y-3 bg-blue-50/50">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                     <label className="text-sm font-medium text-blue-900">
-                      Parameter Examples (Required for Meta approval)
+                      Parameter Examples (Required)
                     </label>
                   </div>
                   <p className="text-xs text-blue-700">
-                    Provide example values for each parameter. These help Meta understand how your template will be used.
+                    Provide example values for each parameter.
                   </p>
                   <div className="space-y-2">
                     {uniqueParams.map((param) => (
-                      <div key={param} className="flex items-center gap-2">
-                        <Badge variant="outline" className="min-w-[80px] justify-center bg-white">
+                      <div key={param} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <Badge variant="outline" className="w-fit sm:min-w-[80px] justify-center bg-white text-xs">
                           {'{{'}{param}{'}}'}
                         </Badge>
                         <Input
@@ -1549,7 +1636,7 @@ export default function SettingsPage() {
                               [param]: e.target.value
                             }
                           })}
-                          placeholder={param.match(/^\d+$/) ? `Example for param ${param}` : `Example ${param}`}
+                          placeholder={`Example ${param}`}
                           className="flex-1 h-8 bg-white"
                         />
                       </div>
@@ -1574,20 +1661,22 @@ export default function SettingsPage() {
             </div>
 
             {/* Buttons Section */}
-            <div className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="border rounded-lg p-3 sm:p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <label className="text-sm font-medium">
                   Buttons
                   <span className="text-xs text-gray-400 ml-1">(optional)</span>
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => addButton('QUICK_REPLY')}
                     disabled={newTemplate.buttons.filter(b => b.type === 'QUICK_REPLY').length >= 10}
                   >
-                    <Plus className="w-3 h-3 mr-1" /> Quick Reply
+                    <Plus className="w-3 h-3 sm:mr-1" />
+                    <span className="hidden sm:inline">Quick Reply</span>
+                    <span className="sm:hidden">Reply</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -1595,7 +1684,8 @@ export default function SettingsPage() {
                     onClick={() => addButton('URL')}
                     disabled={newTemplate.buttons.filter(b => b.type === 'URL').length >= 2}
                   >
-                    <Link className="w-3 h-3 mr-1" /> URL
+                    <Link className="w-3 h-3 sm:mr-1" />
+                    <span>URL</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -1603,7 +1693,8 @@ export default function SettingsPage() {
                     onClick={() => addButton('PHONE_NUMBER')}
                     disabled={newTemplate.buttons.filter(b => b.type === 'PHONE_NUMBER').length >= 1}
                   >
-                    <Phone className="w-3 h-3 mr-1" /> Call
+                    <Phone className="w-3 h-3 sm:mr-1" />
+                    <span>Call</span>
                   </Button>
                 </div>
               </div>
@@ -1611,16 +1702,26 @@ export default function SettingsPage() {
               {newTemplate.buttons.length > 0 && (
                 <div className="space-y-2">
                   {newTemplate.buttons.map((button, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                      <Badge variant="outline" className="text-xs">
-                        {button.type === 'QUICK_REPLY' ? 'Reply' : button.type === 'URL' ? 'URL' : 'Call'}
-                      </Badge>
-                      <Input
-                        value={button.text || ''}
-                        onChange={(e) => updateButton(index, 'text', e.target.value)}
-                        placeholder="Button text"
-                        className="flex-1 h-8"
-                      />
+                    <div key={index} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 bg-gray-50 rounded">
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <Badge variant="outline" className="text-xs flex-shrink-0">
+                          {button.type === 'QUICK_REPLY' ? 'Reply' : button.type === 'URL' ? 'URL' : 'Call'}
+                        </Badge>
+                        <Input
+                          value={button.text || ''}
+                          onChange={(e) => updateButton(index, 'text', e.target.value)}
+                          placeholder="Button text"
+                          className="flex-1 h-8"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeButton(index)}
+                          className="sm:hidden flex-shrink-0"
+                        >
+                          <X className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
                       {button.type === 'URL' && (
                         <Input
                           value={button.url || ''}
@@ -1641,6 +1742,7 @@ export default function SettingsPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeButton(index)}
+                        className="hidden sm:flex flex-shrink-0"
                       >
                         <X className="w-4 h-4 text-red-500" />
                       </Button>

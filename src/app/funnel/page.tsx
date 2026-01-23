@@ -206,7 +206,7 @@ export default function FunnelMetricsPage() {
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
       <Header activeTab="funnel" />
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 pb-20 md:pb-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Page Header */}
           <div className="flex items-center justify-between">

@@ -26,6 +26,7 @@ import {
   Bug,
   ChevronDown,
   ChevronUp,
+  ArrowLeft,
   History,
   ListTodo,
   PhoneCall,
@@ -105,6 +106,7 @@ interface ChatPanelProps {
   leadPhone?: string;
   className?: string;
   onLeadUpdate?: () => void;
+  onMobileBack?: () => void;
 }
 
 export const ChatPanel = memo(function ChatPanel({
@@ -114,6 +116,7 @@ export const ChatPanel = memo(function ChatPanel({
   leadPhone,
   className,
   onLeadUpdate,
+  onMobileBack,
 }: ChatPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('chat');
   const [conversation, setConversation] = useState<ConversationObject | null>(null);
@@ -521,44 +524,56 @@ export const ChatPanel = memo(function ChatPanel({
       {/* Header */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="font-semibold text-gray-900">
-              {leadName || conversation?.client_data?.name || `Lead #${leadId}`}
-            </h2>
-            {(leadCompany || conversation?.client_data?.company) && (
-              <p className="text-sm text-gray-500">
-                {leadCompany || conversation?.client_data?.company}
-              </p>
+          <div className="flex items-center gap-3">
+            {/* Mobile back button */}
+            {onMobileBack && (
+              <button
+                onClick={onMobileBack}
+                className="md:hidden p-1.5 -ml-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                aria-label="Back to leads"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-600" />
+              </button>
             )}
+            <div>
+              <h2 className="font-semibold text-gray-900">
+                {leadName || conversation?.client_data?.name || `Lead #${leadId}`}
+              </h2>
+              {(leadCompany || conversation?.client_data?.company) && (
+                <p className="text-sm text-gray-500">
+                  {leadCompany || conversation?.client_data?.company}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            {/* Deal Stage Badge - next to WhatsApp */}
+          <div className="flex items-center gap-1 md:gap-2">
+            {/* Deal Stage Badge - hidden on mobile */}
             {(crmData?.deal?.dealstage_label || (crmData?.deal?.dealstage && getStageLabel(crmData.deal.dealstage))) && (
-              <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 px-3 py-1.5">
+              <Badge className="hidden md:inline-flex bg-purple-100 text-purple-700 hover:bg-purple-100 px-3 py-1.5">
                 {crmData?.deal?.dealstage_label || getStageLabel(crmData?.deal?.dealstage)}
               </Badge>
             )}
 
-            {/* WhatsApp Button */}
+            {/* WhatsApp Button - icon only on mobile */}
             {cleanPhone && (
               <a
                 href={`https://wa.me/${cleanPhone}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 px-2 md:px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
               >
                 <FaWhatsapp className="w-4 h-4" />
-                Open WhatsApp
+                <span className="hidden md:inline">Open WhatsApp</span>
               </a>
             )}
 
-            {/* Agent Toggle */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
-              <span className="text-sm font-medium text-gray-700 mr-1">Agent</span>
+            {/* Agent Toggle - simplified on mobile */}
+            <div className="flex items-center gap-1 md:gap-2 bg-gray-100 rounded-lg px-2 md:px-3 py-1.5">
+              <span className="hidden md:inline text-sm font-medium text-gray-700 mr-1">Agent</span>
               <span className={cn(
-                'text-xs font-medium w-7',
+                'hidden md:inline text-xs font-medium w-7',
                 !isAgentActive ? 'text-gray-900' : 'text-gray-400'
               )}>
                 OFF
@@ -570,7 +585,7 @@ export const ChatPanel = memo(function ChatPanel({
                 className="data-[state=checked]:bg-green-500"
               />
               <span className={cn(
-                'text-xs font-medium w-7',
+                'hidden md:inline text-xs font-medium w-7',
                 isAgentActive ? 'text-green-600' : 'text-gray-400'
               )}>
                 ON
@@ -826,6 +841,36 @@ export const ChatPanel = memo(function ChatPanel({
 });
 
 
+// Helper function to render text with clickable links
+function renderTextWithLinks(text: string, className?: string): React.ReactNode {
+  // URL regex pattern
+  const urlPattern = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlPattern);
+
+  if (parts.length === 1) {
+    return text;
+  }
+
+  return parts.map((part, index) => {
+    if (urlPattern.test(part)) {
+      // Reset lastIndex since we're reusing the regex
+      urlPattern.lastIndex = 0;
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn('underline hover:opacity-80', className)}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 // Message Bubble Component
 // Inverted: We are the chatbot (assistant), so our messages go on the right
 function MessageBubble({ message, showDebug }: { message: Message; showDebug?: boolean }) {
@@ -868,12 +913,23 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
     : message.content;
   const displayContent = hasMedia && isPlaceholderContent ? mediaMetadata?.caption : strippedContent;
 
+  // Only show system messages when debug mode is active
   if (isSystem) {
+    if (!showDebug) return null;
     return (
-      <div className="flex justify-center">
-        <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-          {message.content}
-        </span>
+      <div className="flex justify-center my-4">
+        <div className="max-w-[95%] bg-amber-50 border border-amber-200 rounded-xl px-4 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Bug className="w-4 h-4 text-amber-600" />
+            <span className="text-xs font-medium text-amber-700">System Context</span>
+          </div>
+          <p className="text-xs text-amber-900 whitespace-pre-wrap break-words">
+            {renderTextWithLinks(message.content || '')}
+          </p>
+          {formattedTime && (
+            <p className="text-[10px] text-amber-500 mt-2">{formattedTime}</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -959,10 +1015,10 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
           {/* Text content (caption or transcribed voice message) */}
           {displayContent && (
             <p className={cn(
-              'text-sm whitespace-pre-wrap',
+              'text-sm whitespace-pre-wrap break-words',
               hasMedia && 'px-3 pb-2 max-w-[280px]'
             )}>
-              {displayContent}
+              {renderTextWithLinks(displayContent, isAssistant ? 'text-blue-100' : 'text-blue-600')}
             </p>
           )}
 
