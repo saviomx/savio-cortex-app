@@ -99,7 +99,7 @@ export interface ConversationSearchResponse {
 // =============================================================================
 
 // API-supported lead status values
-export type LeadStatus = 'all' | 'new_leads' | 'conversing' | 'qualified' | 'demo' | 'need_human';
+export type LeadStatus = 'all' | 'new_leads' | 'conversing' | 'qualified' | 'demo' | 'demo_today' | 'manual_mode';
 
 // Legacy lead categories (deprecated)
 export type LeadCategory =

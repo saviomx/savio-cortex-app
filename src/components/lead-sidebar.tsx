@@ -2,12 +2,12 @@
 
 import { useState, memo } from 'react';
 import { cn } from '@/lib/utils';
-import { Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, AlertCircle, CalendarDays, X, MessageCircle, Clock } from 'lucide-react';
+import { Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, X, MessageCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 // Lead status values matching the API
-export type LeadStatus = 'all' | 'new_leads' | 'conversing' | 'qualified' | 'demo' | 'need_human';
+export type LeadStatus = 'all' | 'new_leads' | 'conversing' | 'qualified' | 'demo' | 'demo_today' | 'manual_mode';
 
 // Window status for 24h filter
 export type WindowStatus = 'all' | 'open' | 'expired';
@@ -16,6 +16,8 @@ interface LeadSidebarProps {
   selectedCategory: LeadStatus;
   onCategoryChange: (category: LeadStatus) => void;
   onDateChange?: (dateFrom: string | null, dateTo: string | null) => void;
+  initialDateFrom?: string | null;
+  initialDateTo?: string | null;
   windowStatus?: WindowStatus;
   onWindowStatusChange?: (status: WindowStatus) => void;
   className?: string;
@@ -63,8 +65,15 @@ const categories: CategoryItem[] = [
     color: 'text-blue-600',
   },
   {
-    id: 'need_human',
-    label: 'Needs Human',
+    id: 'demo_today',
+    label: 'Demo Today',
+    description: 'Demo scheduled for today',
+    icon: CalendarClock,
+    color: 'text-purple-600',
+  },
+  {
+    id: 'manual_mode',
+    label: 'Manual Mode',
     description: 'Agent paused',
     icon: AlertCircle,
     color: 'text-red-600',
@@ -75,13 +84,15 @@ export const LeadSidebar = memo(function LeadSidebar({
   selectedCategory,
   onCategoryChange,
   onDateChange,
+  initialDateFrom,
+  initialDateTo,
   windowStatus = 'all',
   onWindowStatusChange,
   className,
 }: LeadSidebarProps) {
   const [showDateFilter, setShowDateFilter] = useState(false);
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  const [dateFrom, setDateFrom] = useState<string>(initialDateFrom || '');
+  const [dateTo, setDateTo] = useState<string>(initialDateTo || '');
 
   const handleApplyDateFilter = () => {
     onDateChange?.(dateFrom || null, dateTo || null);
@@ -207,7 +218,7 @@ export const LeadSidebar = memo(function LeadSidebar({
               )}
             >
               <Clock className="w-3 h-3" />
-              Closed
+              Expired
             </button>
           </div>
         </div>

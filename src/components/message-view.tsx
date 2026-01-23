@@ -38,6 +38,10 @@ type Message = {
   metadata?: {
     mediaId?: string;
     caption?: string;
+    header_media_url?: string;
+    header_type?: string;
+    template?: boolean;
+    template_name?: string;
   };
 };
 
@@ -387,7 +391,34 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
                         : 'bg-white text-[#111b21] rounded-bl-none'
                     )}
                   >
-                    {message.hasMedia && message.mediaData?.url ? (
+                    {/* Template media (video/image from header) */}
+                    {message.metadata?.header_media_url ? (
+                      <div className="mb-2">
+                        {message.metadata.header_type === 'VIDEO' ? (
+                          <video
+                            src={message.metadata.header_media_url}
+                            controls
+                            className="rounded max-w-full h-auto max-h-96"
+                          />
+                        ) : message.metadata.header_type === 'IMAGE' ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={message.metadata.header_media_url}
+                            alt="Template media"
+                            className="rounded max-w-full h-auto max-h-96"
+                          />
+                        ) : message.metadata.header_type === 'DOCUMENT' ? (
+                          <a
+                            href={message.metadata.header_media_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-sm underline cursor-pointer hover:opacity-80 text-[#00a884]"
+                          >
+                            📎 Download document
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : message.hasMedia && message.mediaData?.url ? (
                       <div className="mb-2">
                         {message.messageType === 'sticker' ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -445,7 +476,10 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
 
                     {message.content && message.content !== '[Image attached]' && (
                       <p className="text-sm break-words whitespace-pre-wrap">
-                        {message.content}
+                        {/* Strip media markers if we're showing actual media */}
+                        {message.metadata?.header_media_url
+                          ? message.content.replace(/^\[(Video|Image|Document)\]\n*/i, '')
+                          : message.content}
                       </p>
                     )}
 

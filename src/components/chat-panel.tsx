@@ -35,6 +35,7 @@ import {
   Plus,
   Trash2,
   Edit3,
+  LayoutTemplate,
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
@@ -43,10 +44,17 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn, formatNumber } from '@/lib/utils';
 import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
 import { formatDateDivider, shouldShowDateDivider, formatChatBubbleTime } from '@/lib/utils/date';
 import { useAutoPolling } from '@/hooks/use-auto-polling';
+import { TemplateSelectorDialog } from './template-selector-dialog';
 import type {
   ConversationObject,
   Message,
@@ -132,6 +140,7 @@ export const ChatPanel = memo(function ChatPanel({
   const [toggling, setToggling] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [updatingAttendance, setUpdatingAttendance] = useState<number | null>(null);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // AbortController for cancelling in-flight requests on leadId change
@@ -681,19 +690,27 @@ export const ChatPanel = memo(function ChatPanel({
               )}
             </ScrollArea>
 
-            {/* Message Input or Window Closed Banner */}
+            {/* Message Input or Window Expired Banner */}
             <div className="flex-shrink-0 p-4 border-t border-gray-200">
               {!isWindowOpen ? (
                 <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                   <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-amber-800">
-                      Chat window closed
+                      Chat window expired
                     </p>
                     <p className="text-xs text-amber-600 mt-0.5">
-                      The customer hasn&apos;t replied in 24+ hours. You can only send template messages until they respond.
+                      The customer hasn&apos;t replied in 24+ hours. Send a template message to re-engage.
                     </p>
                   </div>
+                  <Button
+                    onClick={() => setShowTemplateSelector(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                    size="sm"
+                  >
+                    <LayoutTemplate className="w-4 h-4 mr-1" />
+                    Send Template
+                  </Button>
                 </div>
               ) : (
                 <div className="flex gap-2">
@@ -784,6 +801,26 @@ export const ChatPanel = memo(function ChatPanel({
           />
         )}
       </div>
+
+      {/* Template Selector Dialog */}
+      <TemplateSelectorDialog
+        open={showTemplateSelector}
+        onOpenChange={setShowTemplateSelector}
+        phoneNumber={leadPhone || conversation?.client_data?.phone || ''}
+        contactData={{
+          name: leadName || crmData?.contact?.firstname || conversation?.client_data?.name || '',
+          firstName: crmData?.contact?.firstname || '',
+          lastName: crmData?.contact?.lastname || '',
+          email: crmData?.contact?.email || '',
+          phone: leadPhone || crmData?.contact?.phone || conversation?.client_data?.phone || '',
+          company: leadCompany || crmData?.contact?.company || '',
+          position: crmData?.contact?.position || '',
+        }}
+        onTemplateSent={() => {
+          fetchConversation();
+          onLeadUpdate?.();
+        }}
+      />
     </div>
   );
 });
@@ -808,11 +845,28 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
     caption?: string;
   } | undefined;
 
-  const hasMedia = mediaUrl && payloadType;
+  // Template media (header_media_url from templates with VIDEO/IMAGE/DOCUMENT headers)
+  const templateMediaUrl = metadata?.header_media_url as string | undefined;
+  const templateMediaType = (metadata?.header_type as string | undefined)?.toLowerCase(); // VIDEO -> video
 
-  // Don't show placeholder content like "[IMAGE]" or "[DOCUMENT: ...]" when we have media
+  // Use template media if regular media not present
+  const effectiveMediaUrl = mediaUrl || templateMediaUrl;
+  const effectivePayloadType = payloadType || templateMediaType;
+
+  const hasMedia = effectiveMediaUrl && effectivePayloadType;
+
+  // Check if message failed and get failure reason
+  const messageFailed = metadata?.kapso_status === 'failed' || metadata?.status === 'failed';
+  const failureReason = metadata?.failure_reason as { code?: number; title?: string } | undefined;
+  const failureText = failureReason?.title || failureReason?.code?.toString() || 'Message failed to deliver';
+
+  // Don't show placeholder content like "[IMAGE]", "[Video]", or "[DOCUMENT: ...]" when we have media
   const isPlaceholderContent = message.content?.startsWith('[') && message.content?.endsWith(']');
-  const displayContent = hasMedia && isPlaceholderContent ? mediaMetadata?.caption : message.content;
+  // Also strip "[Video]\n" prefix from template messages when showing actual video
+  const strippedContent = templateMediaUrl
+    ? message.content?.replace(/^\[(Video|Image|Document)\]\n*/i, '')
+    : message.content;
+  const displayContent = hasMedia && isPlaceholderContent ? mediaMetadata?.caption : strippedContent;
 
   if (isSystem) {
     return (
@@ -839,39 +893,39 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
             isAssistant
               ? 'bg-blue-600 text-white rounded-br-md'
               : 'bg-gray-100 text-gray-900 rounded-bl-md',
-            hasMedia ? 'p-1' : 'px-4 py-2.5'
+            hasMedia ? 'p-1 w-fit' : 'px-4 py-2.5'
           )}
         >
           {/* Media content */}
           {hasMedia && (
-            <div className={displayContent ? 'mb-1' : ''}>
-              {payloadType === 'image' && (
+            <div className={cn('flex flex-col items-center', displayContent ? 'mb-1' : '')}>
+              {effectivePayloadType === 'image' && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={mediaUrl}
+                  src={effectiveMediaUrl}
                   alt={mediaMetadata?.caption || 'Image'}
-                  className="rounded-xl max-w-[300px] max-h-[300px] object-cover"
+                  className="rounded-xl max-w-[280px] max-h-[350px] object-contain"
                 />
               )}
-              {payloadType === 'video' && (
+              {effectivePayloadType === 'video' && (
                 <video
-                  src={mediaUrl}
+                  src={effectiveMediaUrl}
                   controls
-                  className="rounded-xl max-w-[300px] max-h-[300px]"
+                  className="rounded-xl max-w-[280px] max-h-[400px] w-auto"
                 />
               )}
-              {(payloadType === 'audio' || (payloadType === 'voice' || isVoice)) && (
+              {(effectivePayloadType === 'audio' || (effectivePayloadType === 'voice' || isVoice)) && (
                 <div className="p-3">
                   <div className={cn('flex items-center gap-2 mb-2', isVoice && 'text-xs')}>
                     <Music className="w-4 h-4" />
                     <span>{isVoice ? 'Voice message' : 'Audio'}</span>
                   </div>
-                  <audio src={mediaUrl} controls className="w-full min-w-[200px]" />
+                  <audio src={effectiveMediaUrl} controls className="w-full min-w-[200px]" />
                 </div>
               )}
-              {payloadType === 'document' && (
+              {effectivePayloadType === 'document' && (
                 <a
-                  href={mediaUrl}
+                  href={effectiveMediaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
@@ -891,10 +945,10 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
                   <Download className="w-4 h-4" />
                 </a>
               )}
-              {payloadType === 'sticker' && (
+              {effectivePayloadType === 'sticker' && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={mediaUrl}
+                  src={effectiveMediaUrl}
                   alt="Sticker"
                   className="w-32 h-32 object-contain"
                 />
@@ -904,21 +958,41 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
 
           {/* Text content (caption or transcribed voice message) */}
           {displayContent && (
-            <p className={cn('text-sm whitespace-pre-wrap', hasMedia && 'px-3 pb-2')}>
+            <p className={cn(
+              'text-sm whitespace-pre-wrap',
+              hasMedia && 'px-3 pb-2 max-w-[280px]'
+            )}>
               {displayContent}
             </p>
           )}
 
-          {/* Timestamp */}
-          {formattedTime && (
-            <div className={cn(
-              'text-[10px] mt-1 text-right',
-              hasMedia ? 'px-3 pb-1' : '',
-              isAssistant ? 'text-blue-200' : 'text-gray-400'
-            )}>
-              {formattedTime}
-            </div>
-          )}
+          {/* Timestamp and status */}
+          <div className={cn(
+            'text-[10px] mt-1 text-right flex items-center justify-end gap-1',
+            hasMedia ? 'px-3 pb-1 max-w-[280px]' : '',
+            isAssistant ? 'text-blue-200' : 'text-gray-400'
+          )}>
+            {formattedTime}
+            {messageFailed && (
+              <TooltipProvider>
+                <Tooltip delayDuration={200}>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 text-red-500 font-medium cursor-help ml-2 bg-red-100 px-2 py-0.5 rounded-full">
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span className="text-[11px]">Failed</span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[300px] bg-red-50 border-red-200 text-red-800">
+                    <p className="text-xs font-medium">Delivery Failed</p>
+                    <p className="text-xs text-red-600 mt-1">{failureText}</p>
+                    {failureReason?.code && (
+                      <p className="text-[10px] text-red-400 mt-1">Error code: {failureReason.code}</p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
 
           {/* Debug metadata section */}
           {showDebug && metadata && Object.keys(metadata).length > 0 && (

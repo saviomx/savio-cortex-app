@@ -22,6 +22,14 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  Upload,
+  Image,
+  Video,
+  File,
+  X,
+  Link,
+  AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
@@ -99,6 +107,14 @@ function formatVerticalName(vertical: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+interface TemplateButton {
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
+  text?: string;
+  url?: string;
+  phone_number?: string;
+  example?: string[];
+}
+
 interface Template {
   id: number;
   name: string;
@@ -108,11 +124,29 @@ interface Template {
   header_type?: string;
   header_text?: string;
   footer_text?: string;
+  buttons_json?: { buttons: TemplateButton[] };
   status: string;
   rejection_reason?: string;
   meta_template_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+type HeaderType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'LOCATION' | '';
+type ButtonType = 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
+
+interface NewTemplateState {
+  name: string;
+  category: string;
+  language: string;
+  body_text: string;
+  header_type: HeaderType;
+  header_text: string;
+  header_handle: string;
+  header_media_url: string;
+  footer_text: string;
+  buttons: TemplateButton[];
+  parameter_examples: Record<string, string>;
 }
 
 interface User {
@@ -151,17 +185,27 @@ export default function SettingsPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [syncingTemplates, setSyncingTemplates] = useState(false);
+  const [templateStatusTab, setTemplateStatusTab] = useState<'APPROVED' | 'PENDING' | 'LOCAL_ONLY' | 'DELETED'>('APPROVED');
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState(false);
   const [expandedTemplate, setExpandedTemplate] = useState<number | null>(null);
-  const [newTemplate, setNewTemplate] = useState({
+  const [newTemplate, setNewTemplate] = useState<NewTemplateState>({
     name: '',
-    category: 'MARKETING',
-    language: 'es',
+    category: '',  // Empty = auto-detect
+    language: '',  // Empty = auto-detect
     body_text: '',
+    header_type: '',
+    header_text: '',
+    header_handle: '',
+    header_media_url: '',
+    footer_text: '',
+    buttons: [],
+    parameter_examples: {},
   });
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [mediaFileName, setMediaFileName] = useState<string>('');
 
   // Users state (admin only)
   const [users, setUsers] = useState<User[]>([]);
@@ -239,14 +283,16 @@ export default function SettingsPage() {
   }, []);
 
   // Fetch templates (admin only)
-  const fetchTemplates = useCallback(async () => {
+  const fetchTemplates = useCallback(async (status?: string) => {
     if (!isAdmin) return;
     try {
       setLoadingTemplates(true);
-      const response = await fetch('/api/admin/templates');
+      const statusFilter = status || templateStatusTab;
+      const response = await fetch(`/api/admin/templates?status=${statusFilter}`);
       if (response.ok) {
         const result = await response.json();
-        const data = result.data || result;
+        // Backend returns { items: [...], total_count, has_more }
+        const data = result.items || result.data || result;
         setTemplates(Array.isArray(data) ? data : []);
       }
     } catch (error) {
@@ -254,7 +300,7 @@ export default function SettingsPage() {
     } finally {
       setLoadingTemplates(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, templateStatusTab]);
 
   // Fetch users (admin only)
   const fetchUsers = useCallback(async () => {
@@ -288,6 +334,13 @@ export default function SettingsPage() {
       fetchUsers();
     }
   }, [isAdmin, fetchTemplates, fetchUsers]);
+
+  // Refetch templates when status tab changes
+  useEffect(() => {
+    if (isAdmin) {
+      fetchTemplates(templateStatusTab);
+    }
+  }, [isAdmin, templateStatusTab, fetchTemplates]);
 
   // Save business profile
   const handleSaveProfile = async () => {
@@ -328,19 +381,134 @@ export default function SettingsPage() {
     }
   };
 
+  // Upload media for template header
+  const handleMediaUpload = async (file: File) => {
+    try {
+      setUploadingMedia(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/admin/templates/upload-media', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setNewTemplate({
+          ...newTemplate,
+          header_handle: result.header_handle,
+          header_media_url: result.url || ''
+        });
+        setMediaFileName(file.name);
+        if (result.warning) {
+          alert(`Warning: ${result.warning}`);
+        }
+      } else {
+        const error = await response.json();
+        console.error('Media upload failed:', error);
+        alert(`Upload failed: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error uploading media:', error);
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
+  // Add button to template
+  const addButton = (type: ButtonType) => {
+    const newButton: TemplateButton = { type, text: '' };
+    if (type === 'URL') newButton.url = '';
+    if (type === 'PHONE_NUMBER') newButton.phone_number = '';
+    setNewTemplate({ ...newTemplate, buttons: [...newTemplate.buttons, newButton] });
+  };
+
+  // Update button
+  const updateButton = (index: number, field: string, value: string) => {
+    const updatedButtons = [...newTemplate.buttons];
+    updatedButtons[index] = { ...updatedButtons[index], [field]: value };
+    setNewTemplate({ ...newTemplate, buttons: updatedButtons });
+  };
+
+  // Remove button
+  const removeButton = (index: number) => {
+    const updatedButtons = newTemplate.buttons.filter((_, i) => i !== index);
+    setNewTemplate({ ...newTemplate, buttons: updatedButtons });
+  };
+
+  // Reset template form
+  const resetTemplateForm = () => {
+    setNewTemplate({
+      name: '',
+      category: '',
+      language: '',
+      body_text: '',
+      header_type: '',
+      header_text: '',
+      header_handle: '',
+      header_media_url: '',
+      footer_text: '',
+      buttons: [],
+      parameter_examples: {},
+    });
+    setMediaFileName('');
+  };
+
   // Create template
   const handleCreateTemplate = async () => {
     try {
       setCreatingTemplate(true);
+
+      // Build the request payload - only include fields that have values
+      const payload: Record<string, unknown> = {
+        name: newTemplate.name,
+        body_text: newTemplate.body_text,
+      };
+
+      // Only include category/language if explicitly set (otherwise backend auto-detects)
+      if (newTemplate.category) payload.category = newTemplate.category;
+      if (newTemplate.language) payload.language = newTemplate.language;
+
+      // Header configuration
+      if (newTemplate.header_type) {
+        payload.header_type = newTemplate.header_type;
+        if (newTemplate.header_type === 'TEXT' && newTemplate.header_text) {
+          payload.header_text = newTemplate.header_text;
+        } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(newTemplate.header_type) && newTemplate.header_handle) {
+          payload.header_handle = newTemplate.header_handle;
+          if (newTemplate.header_media_url) {
+            payload.header_media_url = newTemplate.header_media_url;
+          }
+        }
+      }
+
+      // Footer
+      if (newTemplate.footer_text) payload.footer_text = newTemplate.footer_text;
+
+      // Buttons
+      if (newTemplate.buttons.length > 0) {
+        payload.buttons = newTemplate.buttons;
+      }
+
+      // Parameter examples (if any)
+      if (Object.keys(newTemplate.parameter_examples).length > 0) {
+        payload.parameter_examples = newTemplate.parameter_examples;
+      }
+
       const response = await fetch('/api/admin/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTemplate),
+        body: JSON.stringify(payload),
       });
+
       if (response.ok) {
         setShowCreateTemplate(false);
-        setNewTemplate({ name: '', category: 'MARKETING', language: 'es', body_text: '' });
+        resetTemplateForm();
         await fetchTemplates();
+      } else {
+        const error = await response.json();
+        alert(`Failed to create template: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating template:', error);
@@ -851,6 +1019,58 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
+                  {/* Status Tabs */}
+                  <div className="flex border-b border-gray-200">
+                    <button
+                      onClick={() => setTemplateStatusTab('APPROVED')}
+                      className={cn(
+                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        templateStatusTab === 'APPROVED'
+                          ? 'border-green-500 text-green-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      )}
+                    >
+                      <CheckCircle className="w-4 h-4 inline mr-1.5" />
+                      Active
+                    </button>
+                    <button
+                      onClick={() => setTemplateStatusTab('PENDING')}
+                      className={cn(
+                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        templateStatusTab === 'PENDING'
+                          ? 'border-yellow-500 text-yellow-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      )}
+                    >
+                      <RefreshCw className="w-4 h-4 inline mr-1.5" />
+                      Pending Review
+                    </button>
+                    <button
+                      onClick={() => setTemplateStatusTab('LOCAL_ONLY')}
+                      className={cn(
+                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        templateStatusTab === 'LOCAL_ONLY'
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      )}
+                    >
+                      <FileText className="w-4 h-4 inline mr-1.5" />
+                      Local Only
+                    </button>
+                    <button
+                      onClick={() => setTemplateStatusTab('DELETED')}
+                      className={cn(
+                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        templateStatusTab === 'DELETED'
+                          ? 'border-red-500 text-red-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      )}
+                    >
+                      <Trash2 className="w-4 h-4 inline mr-1.5" />
+                      Deleted
+                    </button>
+                  </div>
+
                   {loadingTemplates ? (
                     <div className="space-y-4">
                       {[1, 2, 3].map((i) => (
@@ -1093,17 +1313,25 @@ export default function SettingsPage() {
       </div>
 
       {/* Create Template Dialog */}
-      <Dialog open={showCreateTemplate} onOpenChange={setShowCreateTemplate}>
-        <DialogContent className="sm:max-w-[600px]">
+      <Dialog open={showCreateTemplate} onOpenChange={(open) => {
+        setShowCreateTemplate(open);
+        if (!open) resetTemplateForm();
+      }}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Template</DialogTitle>
             <DialogDescription>
               Create a new WhatsApp message template. Templates must be approved by Meta before use.
+              <span className="flex items-center gap-1 mt-1 text-blue-600">
+                <Sparkles className="w-3 h-3" />
+                Leave category and language empty for smart auto-detection
+              </span>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Template Name */}
             <div>
-              <label className="text-sm font-medium">Template Name</label>
+              <label className="text-sm font-medium">Template Name *</label>
               <Input
                 value={newTemplate.name}
                 onChange={(e) => setNewTemplate({ ...newTemplate, name: e.target.value })}
@@ -1114,15 +1342,20 @@ export default function SettingsPage() {
                 Lowercase letters, numbers, and underscores only
               </p>
             </div>
+
+            {/* Category and Language */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium">Category</label>
+                <label className="text-sm font-medium flex items-center gap-1">
+                  Category
+                  <span className="text-xs text-gray-400">(optional)</span>
+                </label>
                 <Select
                   value={newTemplate.category}
                   onValueChange={(value) => setNewTemplate({ ...newTemplate, category: value })}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue />
+                    <SelectValue placeholder="Auto-detect" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="MARKETING">Marketing</SelectItem>
@@ -1132,37 +1365,302 @@ export default function SettingsPage() {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium">Language</label>
+                <label className="text-sm font-medium flex items-center gap-1">
+                  Language
+                  <span className="text-xs text-gray-400">(optional)</span>
+                </label>
                 <Select
                   value={newTemplate.language}
                   onValueChange={(value) => setNewTemplate({ ...newTemplate, language: value })}
                 >
                   <SelectTrigger className="mt-1">
-                    <SelectValue />
+                    <SelectValue placeholder="Auto-detect" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="es">Spanish</SelectItem>
+                    <SelectItem value="es_MX">Spanish (Mexico)</SelectItem>
                     <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="en_US">English (US)</SelectItem>
                     <SelectItem value="pt_BR">Portuguese (BR)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {/* Header Section */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <label className="text-sm font-medium flex items-center gap-2">
+                Header
+                <span className="text-xs text-gray-400">(optional)</span>
+              </label>
+              <Select
+                value={newTemplate.header_type}
+                onValueChange={(value) => setNewTemplate({
+                  ...newTemplate,
+                  header_type: value as HeaderType,
+                  header_text: '',
+                  header_handle: '',
+                  header_media_url: ''
+                })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No header" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TEXT">
+                    <span className="flex items-center gap-2"><FileText className="w-4 h-4" /> Text</span>
+                  </SelectItem>
+                  <SelectItem value="IMAGE">
+                    <span className="flex items-center gap-2"><Image className="w-4 h-4" /> Image</span>
+                  </SelectItem>
+                  <SelectItem value="VIDEO">
+                    <span className="flex items-center gap-2"><Video className="w-4 h-4" /> Video</span>
+                  </SelectItem>
+                  <SelectItem value="DOCUMENT">
+                    <span className="flex items-center gap-2"><File className="w-4 h-4" /> Document</span>
+                  </SelectItem>
+                  <SelectItem value="LOCATION">
+                    <span className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Location</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Text Header Input */}
+              {newTemplate.header_type === 'TEXT' && (
+                <div>
+                  <Input
+                    value={newTemplate.header_text}
+                    onChange={(e) => setNewTemplate({ ...newTemplate, header_text: e.target.value })}
+                    placeholder="Header text (e.g., Order {{order_id}} Update)"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Use {'{{param_name}}'} for dynamic variables
+                  </p>
+                </div>
+              )}
+
+              {/* Media Header Upload */}
+              {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(newTemplate.header_type) && (
+                <div className="space-y-2">
+                  {newTemplate.header_handle ? (
+                    <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <span className="text-sm text-green-700 flex-1 truncate">{mediaFileName}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setNewTemplate({ ...newTemplate, header_handle: '', header_media_url: '' });
+                          setMediaFileName('');
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <input
+                        type="file"
+                        id="media-upload"
+                        className="hidden"
+                        accept={
+                          newTemplate.header_type === 'IMAGE' ? 'image/jpeg,image/png' :
+                          newTemplate.header_type === 'VIDEO' ? 'video/mp4,video/3gpp' :
+                          '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx'
+                        }
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleMediaUpload(file);
+                        }}
+                      />
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => document.getElementById('media-upload')?.click()}
+                        disabled={uploadingMedia}
+                      >
+                        {uploadingMedia ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4 mr-2" />
+                        )}
+                        {uploadingMedia ? 'Uploading...' : `Upload ${newTemplate.header_type.toLowerCase()}`}
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    {newTemplate.header_type === 'IMAGE' && 'JPEG or PNG, max 5MB'}
+                    {newTemplate.header_type === 'VIDEO' && 'MP4 or 3GPP, max 16MB'}
+                    {newTemplate.header_type === 'DOCUMENT' && 'PDF, Word, Excel, or PowerPoint, max 100MB'}
+                  </p>
+                </div>
+              )}
+
+              {newTemplate.header_type === 'LOCATION' && (
+                <p className="text-xs text-gray-500">
+                  Location will be provided when sending the template
+                </p>
+              )}
+            </div>
+
+            {/* Body Text */}
             <div>
-              <label className="text-sm font-medium">Message Body</label>
+              <label className="text-sm font-medium">Message Body *</label>
               <Textarea
                 value={newTemplate.body_text}
                 onChange={(e) => setNewTemplate({ ...newTemplate, body_text: e.target.value })}
                 placeholder="Enter your message template..."
-                className="mt-1 min-h-[120px]"
+                className="mt-1 min-h-[100px]"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Use {'{{1}}'}, {'{{2}}'}, etc. for dynamic variables
+                Use {'{{1}}'}, {'{{2}}'} for positional params or {'{{customer_name}}'} for named params
               </p>
+            </div>
+
+            {/* Parameter Examples - Show when body text has parameters */}
+            {(() => {
+              const params = (newTemplate.body_text.match(/\{\{(\w+)\}\}/g) || []).map(p => p.replace(/[{}]/g, ''));
+              const uniqueParams = [...new Set(params)];
+              if (uniqueParams.length === 0) return null;
+
+              return (
+                <div className="border rounded-lg p-4 space-y-3 bg-blue-50/50">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-blue-600" />
+                    <label className="text-sm font-medium text-blue-900">
+                      Parameter Examples (Required for Meta approval)
+                    </label>
+                  </div>
+                  <p className="text-xs text-blue-700">
+                    Provide example values for each parameter. These help Meta understand how your template will be used.
+                  </p>
+                  <div className="space-y-2">
+                    {uniqueParams.map((param) => (
+                      <div key={param} className="flex items-center gap-2">
+                        <Badge variant="outline" className="min-w-[80px] justify-center bg-white">
+                          {'{{'}{param}{'}}'}
+                        </Badge>
+                        <Input
+                          value={newTemplate.parameter_examples[param] || ''}
+                          onChange={(e) => setNewTemplate({
+                            ...newTemplate,
+                            parameter_examples: {
+                              ...newTemplate.parameter_examples,
+                              [param]: e.target.value
+                            }
+                          })}
+                          placeholder={param.match(/^\d+$/) ? `Example for param ${param}` : `Example ${param}`}
+                          className="flex-1 h-8 bg-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Footer */}
+            <div>
+              <label className="text-sm font-medium flex items-center gap-1">
+                Footer
+                <span className="text-xs text-gray-400">(optional)</span>
+              </label>
+              <Input
+                value={newTemplate.footer_text}
+                onChange={(e) => setNewTemplate({ ...newTemplate, footer_text: e.target.value })}
+                placeholder="e.g., Reply STOP to unsubscribe"
+                className="mt-1"
+              />
+            </div>
+
+            {/* Buttons Section */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  Buttons
+                  <span className="text-xs text-gray-400 ml-1">(optional)</span>
+                </label>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addButton('QUICK_REPLY')}
+                    disabled={newTemplate.buttons.filter(b => b.type === 'QUICK_REPLY').length >= 10}
+                  >
+                    <Plus className="w-3 h-3 mr-1" /> Quick Reply
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addButton('URL')}
+                    disabled={newTemplate.buttons.filter(b => b.type === 'URL').length >= 2}
+                  >
+                    <Link className="w-3 h-3 mr-1" /> URL
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addButton('PHONE_NUMBER')}
+                    disabled={newTemplate.buttons.filter(b => b.type === 'PHONE_NUMBER').length >= 1}
+                  >
+                    <Phone className="w-3 h-3 mr-1" /> Call
+                  </Button>
+                </div>
+              </div>
+
+              {newTemplate.buttons.length > 0 && (
+                <div className="space-y-2">
+                  {newTemplate.buttons.map((button, index) => (
+                    <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                      <Badge variant="outline" className="text-xs">
+                        {button.type === 'QUICK_REPLY' ? 'Reply' : button.type === 'URL' ? 'URL' : 'Call'}
+                      </Badge>
+                      <Input
+                        value={button.text || ''}
+                        onChange={(e) => updateButton(index, 'text', e.target.value)}
+                        placeholder="Button text"
+                        className="flex-1 h-8"
+                      />
+                      {button.type === 'URL' && (
+                        <Input
+                          value={button.url || ''}
+                          onChange={(e) => updateButton(index, 'url', e.target.value)}
+                          placeholder="https://example.com"
+                          className="flex-1 h-8"
+                        />
+                      )}
+                      {button.type === 'PHONE_NUMBER' && (
+                        <Input
+                          value={button.phone_number || ''}
+                          onChange={(e) => updateButton(index, 'phone_number', e.target.value)}
+                          placeholder="+15551234567"
+                          className="flex-1 h-8"
+                        />
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeButton(index)}
+                      >
+                        <X className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {newTemplate.buttons.length === 0 && (
+                <p className="text-xs text-gray-500 text-center py-2">
+                  No buttons added. Click above to add interactive buttons.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateTemplate(false)}>
+            <Button variant="outline" onClick={() => {
+              setShowCreateTemplate(false);
+              resetTemplateForm();
+            }}>
               Cancel
             </Button>
             <Button
@@ -1184,10 +1682,21 @@ export default function SettingsPage() {
       <AlertDialog open={!!templateToDelete} onOpenChange={() => setTemplateToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            <AlertDialogTitle>
+              {templateToDelete?.status === 'DELETED' ? 'Permanently Delete Template' : 'Delete Template'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the template &quot;{templateToDelete?.name}&quot;? This
-              action cannot be undone.
+              {templateToDelete?.status === 'DELETED' ? (
+                <>
+                  Are you sure you want to <strong>permanently delete</strong> the template &quot;{templateToDelete?.name}&quot;?
+                  This will remove it from the database completely and cannot be undone.
+                </>
+              ) : (
+                <>
+                  Are you sure you want to delete the template &quot;{templateToDelete?.name}&quot;?
+                  It will be moved to the Deleted tab where you can permanently delete it later.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1202,7 +1711,7 @@ export default function SettingsPage() {
               ) : (
                 <Trash2 className="w-4 h-4 mr-2" />
               )}
-              Delete
+              {templateToDelete?.status === 'DELETED' ? 'Delete Permanently' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

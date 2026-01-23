@@ -135,7 +135,8 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
       conversing: 'Conversing',
       qualified: 'Qualified',
       demo: 'Demo Scheduled',
-      need_human: 'Needs Human',
+      demo_today: 'Demo Today',
+      manual_mode: 'Manual Mode',
     };
     return labels[category] || 'Leads';
   };
@@ -229,7 +230,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
                           <Bot className="w-5 h-5 text-gray-600" />
                         )}
                       </div>
-                      {/* Status Indicator - shows red for needs human, green for open, gray for closed */}
+                      {/* Status Indicator - shows red for needs human, green for open, gray for expired */}
                       <div
                         className={cn(
                           'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white',
@@ -239,7 +240,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
                               ? 'bg-green-500'
                               : 'bg-gray-300'
                         )}
-                        title={needsHuman ? 'Requires human attention' : lead.window_status === 'open' ? 'Chat window open' : 'Chat window closed'}
+                        title={needsHuman ? 'Requires human attention' : lead.window_status === 'open' ? 'Chat window open' : 'Chat window expired'}
                       />
                     </div>
 

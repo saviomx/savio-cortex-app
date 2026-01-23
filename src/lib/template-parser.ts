@@ -6,44 +6,144 @@ import type {
 } from '@/types/whatsapp';
 
 /**
+ * Extract parameter placeholders from text (e.g., {{name}}, {{1}})
+ */
+function extractPlaceholders(text: string): string[] {
+  const matches = text.match(/\{\{(\w+)\}\}/g) || [];
+  // Remove duplicates while preserving order
+  return [...new Set(matches.map(m => m.replace(/[{}]/g, '')))];
+}
+
+/**
  * Extracts parameter information from a WhatsApp template
+ * Supports both Meta components format and our database format
  */
 export function getTemplateParameters(template: Template): TemplateParameterInfo {
   const parameters: TemplateParameterInfo['parameters'] = [];
   let format: ParameterFormat = 'POSITIONAL';
 
-  if (!template.components) {
+  // First try: Use Meta components format if available
+  if (template.components && template.components.length > 0) {
+    for (const component of template.components) {
+      if (component.type === 'HEADER' && component.format === 'TEXT') {
+        const headerParams = extractHeaderParameters(component);
+        if (headerParams.length > 0) {
+          parameters.push(...headerParams.map(p => ({ ...p, component: 'HEADER' as const })));
+          if (component.example?.headerTextNamedParams) {
+            format = 'NAMED';
+          }
+        }
+      }
+
+      if (component.type === 'BODY') {
+        const bodyParams = extractBodyParameters(component);
+        if (bodyParams.length > 0) {
+          parameters.push(...bodyParams.map(p => ({ ...p, component: 'BODY' as const })));
+          if (component.example?.bodyTextNamedParams) {
+            format = 'NAMED';
+          }
+        }
+      }
+
+      if (component.type === 'BUTTONS') {
+        const buttonParams = extractButtonParameters(component);
+        if (buttonParams.length > 0) {
+          parameters.push(...buttonParams.map(p => ({ ...p, component: 'BUTTON' as const })));
+        }
+      }
+    }
     return { format, parameters };
   }
 
-  // Check each component for parameters
-  for (const component of template.components) {
-    if (component.type === 'HEADER' && component.format === 'TEXT') {
-      const headerParams = extractHeaderParameters(component);
-      if (headerParams.length > 0) {
-        parameters.push(...headerParams.map(p => ({ ...p, component: 'HEADER' as const })));
-        if (component.example?.headerTextNamedParams) {
-          format = 'NAMED';
-        }
-      }
-    }
+  // Fallback: Parse from our database format (body_text, header_text, parameters_json)
 
-    if (component.type === 'BODY') {
-      const bodyParams = extractBodyParameters(component);
-      if (bodyParams.length > 0) {
-        parameters.push(...bodyParams.map(p => ({ ...p, component: 'BODY' as const })));
-        if (component.example?.bodyTextNamedParams) {
-          format = 'NAMED';
-        }
-      }
-    }
+  // Check parameter format from database
+  if (template.parameter_format === 'NAMED') {
+    format = 'NAMED';
+  }
 
-    if (component.type === 'BUTTONS') {
-      const buttonParams = extractButtonParameters(component);
-      if (buttonParams.length > 0) {
-        parameters.push(...buttonParams.map(p => ({ ...p, component: 'BUTTON' as const })));
+  // Get examples from parameters_json if available
+  const storedParams = template.parameters_json as {
+    body_parameters?: Array<{ param_name: string; example: string }>;
+    header_parameters?: Array<{ param_name: string; example: string }>;
+    format?: string;
+  } | undefined;
+
+  // Build example lookup
+  const exampleLookup: Record<string, string> = {};
+  if (storedParams?.body_parameters) {
+    storedParams.body_parameters.forEach(p => {
+      exampleLookup[p.param_name] = p.example;
+    });
+  }
+  if (storedParams?.header_parameters) {
+    storedParams.header_parameters.forEach(p => {
+      exampleLookup[p.param_name] = p.example;
+    });
+  }
+
+  // Extract from header_text
+  if (template.header_text) {
+    const headerPlaceholders = extractPlaceholders(template.header_text);
+    headerPlaceholders.forEach(name => {
+      // Check if it's positional (numeric) or named
+      if (/^\d+$/.test(name)) {
+        format = 'POSITIONAL';
+      } else {
+        format = 'NAMED';
       }
-    }
+      parameters.push({
+        name,
+        example: exampleLookup[name],
+        component: 'HEADER',
+      });
+    });
+  }
+
+  // Extract from body_text
+  if (template.body_text) {
+    const bodyPlaceholders = extractPlaceholders(template.body_text);
+    bodyPlaceholders.forEach(name => {
+      // Check if it's positional (numeric) or named
+      if (/^\d+$/.test(name)) {
+        format = 'POSITIONAL';
+      } else {
+        format = 'NAMED';
+      }
+      parameters.push({
+        name,
+        example: exampleLookup[name],
+        component: 'BODY',
+      });
+    });
+  }
+
+  // Extract button parameters from buttons_json
+  if (template.buttons_json?.buttons) {
+    template.buttons_json.buttons.forEach((button, buttonIndex) => {
+      if (button.example && button.example.length > 0) {
+        button.example.forEach((exampleValue, paramIndex) => {
+          parameters.push({
+            name: `button_${buttonIndex}_param_${paramIndex + 1}`,
+            example: exampleValue,
+            component: 'BUTTON',
+            buttonIndex,
+          });
+        });
+      }
+      // Also check for URL parameters like {{1}} in button URLs
+      if (button.url) {
+        const urlPlaceholders = extractPlaceholders(button.url);
+        urlPlaceholders.forEach((name, paramIndex) => {
+          parameters.push({
+            name: `button_${buttonIndex}_url_${name}`,
+            example: button.example?.[paramIndex],
+            component: 'BUTTON',
+            buttonIndex,
+          });
+        });
+      }
+    });
   }
 
   return { format, parameters };
@@ -136,18 +236,14 @@ function extractButtonParameters(component: TemplateComponent): Array<{ name: st
 
 /**
  * Converts user input to the appropriate format for the template
+ * Always returns a dict - backend will handle conversion based on parameter_format
  */
 export function formatParametersForTemplate(
   parameterInfo: TemplateParameterInfo,
   values: Record<string, string>
-): string[] | Record<string, string> {
-  if (parameterInfo.format === 'NAMED') {
-    // Return as object with parameter names as keys
-    return values;
-  }
-
-  // Return as array in the order parameters appear
-  return parameterInfo.parameters.map(param => values[param.name] || '');
+): Record<string, string> {
+  // Always return as dict - backend handles the conversion
+  return values;
 }
 
 /**
