@@ -35,6 +35,19 @@ export type Template = {
   language: string;
   status: string;
   components?: TemplateComponent[];
+  // Fields returned by our backend
+  body_text?: string;
+  header_type?: string;
+  header_text?: string;
+  header_media_url?: string;
+  footer_text?: string;
+  buttons_json?: { buttons: TemplateButton[] };
+  parameter_format?: string;
+  parameters_json?: Record<string, unknown>;
+  rejection_reason?: string;
+  meta_template_id?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type ParameterFormat = 'POSITIONAL' | 'NAMED';
@@ -49,4 +62,4 @@ export type TemplateParameterInfo = {
   }>;
 };
 
-export type TemplateParameters = string[] | Record<string, string>;
+export type TemplateParameters = Record<string, string>;

@@ -41,7 +41,7 @@ import {
 } from 'recharts';
 import type { CRMMetricsResponse, FunnelStage, StepConversionRate } from '@/types/cortex';
 
-type DateRange = '7d' | '14d' | '30d' | '90d';
+type DateRange = '7d' | '14d' | '30d' | '90d' | '180d';
 
 // Cache duration: 1 hour (in milliseconds)
 const CACHE_DURATION = 60 * 60 * 1000;
@@ -71,6 +71,9 @@ function getDateRange(range: DateRange): { startDate: string; endDate: string } 
       break;
     case '90d':
       startDate.setDate(endDate.getDate() - 90);
+      break;
+    case '180d':
+      startDate.setDate(endDate.getDate() - 180);
       break;
   }
 
@@ -152,7 +155,7 @@ const CustomTooltip = ({ active, payload, label, formatter }: {
 };
 
 export default function FunnelMetricsPage() {
-  const [dateRange, setDateRange] = useState<DateRange>('30d');
+  const [dateRange, setDateRange] = useState<DateRange>('7d');
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
   const { startDate, endDate } = getDateRange(dateRange);
@@ -246,6 +249,7 @@ export default function FunnelMetricsPage() {
                   <SelectItem value="14d">Last 14 days</SelectItem>
                   <SelectItem value="30d">Last 30 days</SelectItem>
                   <SelectItem value="90d">Last 90 days</SelectItem>
+                  <SelectItem value="180d">Last 180 days</SelectItem>
                 </SelectContent>
               </Select>
             </div>

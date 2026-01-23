@@ -45,7 +45,7 @@ export async function GET(
 
 /**
  * DELETE /api/admin/templates/[template_id]
- * Delete a template
+ * Delete a template (locally and from Meta/Kapso)
  */
 export async function DELETE(
   request: Request,
@@ -55,10 +55,17 @@ export async function DELETE(
     const { template_id } = await params;
     const headers = getAuthHeaders();
 
-    const response = await fetch(`${CORTEX_API_URL}/templates/${template_id}`, {
-      method: 'DELETE',
-      headers,
-    });
+    // Get query params for delete_from_meta option
+    const url = new URL(request.url);
+    const deleteFromMeta = url.searchParams.get('delete_from_meta') !== 'false';
+
+    const response = await fetch(
+      `${CORTEX_API_URL}/templates/${template_id}?delete_from_meta=${deleteFromMeta}`,
+      {
+        method: 'DELETE',
+        headers,
+      }
+    );
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to delete template' }));
@@ -68,7 +75,12 @@ export async function DELETE(
       );
     }
 
-    return NextResponse.json({ success: true });
+    // Return the detailed deletion result
+    const result = await response.json();
+    return NextResponse.json({
+      success: true,
+      ...result,
+    });
   } catch (error) {
     console.error('Error deleting template:', error);
     return NextResponse.json(

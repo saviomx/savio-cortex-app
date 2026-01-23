@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Eye, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,14 +17,25 @@ import type { Template, TemplateParameterInfo } from '@/types/whatsapp';
 import { getTemplateParameters } from '@/lib/template-parser';
 import { TemplateParametersDialog } from './template-parameters-dialog';
 
+export interface ContactData {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  position?: string;
+}
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   phoneNumber: string;
+  contactData?: ContactData;
   onTemplateSent?: () => void;
 };
 
-export function TemplateSelectorDialog({ open, onOpenChange, phoneNumber, onTemplateSent }: Props) {
+export function TemplateSelectorDialog({ open, onOpenChange, phoneNumber, contactData, onTemplateSent }: Props) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
@@ -167,12 +178,13 @@ export function TemplateSelectorDialog({ open, onOpenChange, phoneNumber, onTemp
               {templates.map((template) => (
                 <div
                   key={template.id}
-                  className="p-4 border border-[#d1d7db] rounded-lg hover:bg-[#f0f2f5] transition-colors"
+                  className="p-4 border border-[#d1d7db] rounded-lg hover:bg-[#f0f2f5] transition-colors cursor-pointer"
+                  onClick={() => handleSelectTemplate(template)}
                 >
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-[#111b21] truncate">
-                        {template.name}
+                        {template.name.replace(/_/g, ' ')}
                       </h3>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="secondary" className={getCategoryColor(template.category)}>
@@ -184,7 +196,10 @@ export function TemplateSelectorDialog({ open, onOpenChange, phoneNumber, onTemp
                       </div>
                     </div>
                     <Button
-                      onClick={() => handleSelectTemplate(template)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectTemplate(template);
+                      }}
                       disabled={sending !== null}
                       size="sm"
                       className="bg-[#00a884] hover:bg-[#008f6f]"
@@ -193,12 +208,22 @@ export function TemplateSelectorDialog({ open, onOpenChange, phoneNumber, onTemp
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <>
-                          <Send className="h-4 w-4 mr-1" />
-                          Send
+                          <ChevronRight className="h-4 w-4" />
                         </>
                       )}
                     </Button>
                   </div>
+                  {/* Template Preview */}
+                  {template.body_text && (
+                    <p className="text-sm text-[#667781] mt-2 line-clamp-2">
+                      {template.body_text}
+                    </p>
+                  )}
+                  {template.header_text && (
+                    <p className="text-xs text-[#8696a0] mt-1 italic">
+                      Header: {template.header_text}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -222,6 +247,7 @@ export function TemplateSelectorDialog({ open, onOpenChange, phoneNumber, onTemp
         template={selectedTemplate}
         parameterInfo={parameterInfo}
         phoneNumber={phoneNumber}
+        contactData={contactData}
         onBack={handleBackToTemplateSelector}
         onTemplateSent={handleTemplateWithParametersSent}
       />

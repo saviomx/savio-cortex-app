@@ -12,12 +12,27 @@ function getAuthHeaders() {
 
 /**
  * GET /api/admin/templates
- * List all WhatsApp templates
+ * List all WhatsApp templates with optional status filter
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status');
+    const category = searchParams.get('category');
+    const language = searchParams.get('language');
+
     const headers = getAuthHeaders();
-    const response = await fetch(`${CORTEX_API_URL}/templates`, { headers });
+
+    // Build query string for backend
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (category) params.set('category', category);
+    if (language) params.set('language', language);
+
+    const queryString = params.toString();
+    const url = `${CORTEX_API_URL}/templates${queryString ? `?${queryString}` : ''}`;
+
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Failed to fetch templates' }));

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { Header } from '@/components/header';
 import { LeadSidebar, type LeadStatus, type WindowStatus } from '@/components/lead-sidebar';
 import { LeadList, type LeadListRef } from '@/components/lead-list';
@@ -11,11 +11,29 @@ interface SelectedLead extends ConversationSearchItem {
   displayName: string;
 }
 
+// Helper to get date string in YYYY-MM-DD format
+function getDateString(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+// Calculate default date range (last 7 days)
+function getDefaultDateRange(): { from: string; to: string } {
+  const today = new Date();
+  const sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 7);
+  return {
+    from: getDateString(sevenDaysAgo),
+    to: getDateString(today),
+  };
+}
+
 export default function Home() {
+  // Initialize with default 7-day date range
+  const defaultDates = useMemo(() => getDefaultDateRange(), []);
   const [selectedCategory, setSelectedCategory] = useState<LeadStatus>('all');
   const [selectedLead, setSelectedLead] = useState<SelectedLead | null>(null);
-  const [dateFrom, setDateFrom] = useState<string | null>(null);
-  const [dateTo, setDateTo] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState<string | null>(defaultDates.from);
+  const [dateTo, setDateTo] = useState<string | null>(defaultDates.to);
   const [windowStatus, setWindowStatus] = useState<WindowStatus>('all');
   const leadListRef = useRef<LeadListRef>(null);
 
@@ -52,6 +70,8 @@ export default function Home() {
           selectedCategory={selectedCategory}
           onCategoryChange={handleCategoryChange}
           onDateChange={handleDateChange}
+          initialDateFrom={defaultDates.from}
+          initialDateTo={defaultDates.to}
           windowStatus={windowStatus}
           onWindowStatusChange={handleWindowStatusChange}
           className="w-56 flex-shrink-0 hidden md:flex flex-col"

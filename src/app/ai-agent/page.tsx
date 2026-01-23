@@ -39,7 +39,7 @@ import type {
   ConversionDailyResponse,
 } from '@/types/cortex';
 
-type DateRange = '7d' | '14d' | '30d' | '90d';
+type DateRange = '7d' | '14d' | '30d' | '90d' | '180d';
 
 interface MetricsData {
   funnel: FunnelMetricsResponse;
@@ -81,6 +81,9 @@ function getDateRange(range: DateRange): { startDate: string; endDate: string } 
     case '90d':
       startDate.setDate(endDate.getDate() - 90);
       break;
+    case '180d':
+      startDate.setDate(endDate.getDate() - 180);
+      break;
   }
 
   return {
@@ -103,7 +106,7 @@ function formatLastUpdated(date: Date | null): string {
 }
 
 export default function AIAgentPage() {
-  const [dateRange, setDateRange] = useState<DateRange>('14d');
+  const [dateRange, setDateRange] = useState<DateRange>('7d');
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
   const { startDate, endDate } = getDateRange(dateRange);
@@ -216,6 +219,7 @@ export default function AIAgentPage() {
                   <SelectItem value="14d">Last 14 days</SelectItem>
                   <SelectItem value="30d">Last 30 days</SelectItem>
                   <SelectItem value="90d">Last 90 days</SelectItem>
+                  <SelectItem value="180d">Last 180 days</SelectItem>
                 </SelectContent>
               </Select>
             </div>
