@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Send, Loader2, Eye, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,

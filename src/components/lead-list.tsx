@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, forwardRef, useImperativeHandle, memo, useRef } from 'react';
-import { Search, AlertTriangle, Bot, User, Loader2, SlidersHorizontal, Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, X, MessageCircle, Clock } from 'lucide-react';
+import { Search, AlertTriangle, Bot, User, Loader2, SlidersHorizontal, Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, MessageCircle, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -63,7 +63,6 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   // Mobile filter state
-  const [showMobileDateFilter, setShowMobileDateFilter] = useState(false);
   const [mobileDateFrom, setMobileDateFrom] = useState<string>(dateFrom || '');
   const [mobileDateTo, setMobileDateTo] = useState<string>(dateTo || '');
   const [mobileFilterSheetOpen, setMobileFilterSheetOpen] = useState(false);
@@ -184,14 +183,12 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
 
   const handleApplyMobileDateFilter = () => {
     onDateChange?.(mobileDateFrom || null, mobileDateTo || null);
-    setShowMobileDateFilter(false);
   };
 
   const handleClearMobileDateFilter = () => {
     setMobileDateFrom('');
     setMobileDateTo('');
     onDateChange?.(null, null);
-    setShowMobileDateFilter(false);
   };
 
   return (

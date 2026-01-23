@@ -89,7 +89,7 @@ export function TemplateParametersDialog({
   const [parameterValues, setParameterValues] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(true);
+  const [showPreview] = useState(true);
   const hasInitialized = useRef(false);
   const lastTemplateId = useRef<string | null>(null);
 
