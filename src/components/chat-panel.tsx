@@ -352,62 +352,7 @@ export const ChatPanel = memo(function ChatPanel({
     }
   }, [leadPhone, conversation?.client_data?.phone, loadingTasks, crmCache]);
 
-  // Check if company intelligence exists (GET)
-  const checkCompanyIntelligence = useCallback(async () => {
-    const phone = leadPhone || conversation?.client_data?.phone;
-    if (!leadId || loadingCompanyIntel) return;
-
-    try {
-      setLoadingCompanyIntel(true);
-      const params = new URLSearchParams();
-      if (phone) params.set('phone', phone);
-
-      const response = await fetch(`/api/leads/${leadId}/company-intelligence?${params}`);
-      const data = await response.json();
-      setCompanyIntelligence(data);
-
-      // Start polling if status is processing
-      if (data.status === 'processing') {
-        startPolling();
-      }
-    } catch (error) {
-      console.error('Error checking company intelligence:', error);
-      setCompanyIntelligence({ exists: false, status: 'failed', error: 'Failed to check company intelligence' });
-    } finally {
-      setLoadingCompanyIntel(false);
-    }
-  }, [leadId, leadPhone, conversation?.client_data?.phone, loadingCompanyIntel]);
-
-  // Generate company intelligence (POST) - triggers background generation
-  const generateCompanyIntelligence = useCallback(async (refresh = false) => {
-    const phone = leadPhone || conversation?.client_data?.phone;
-    if (!leadId || generatingCompanyIntel) return;
-
-    try {
-      setGeneratingCompanyIntel(true);
-      const response = await fetch(`/api/leads/${leadId}/company-intelligence`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh, phone }),
-      });
-      const data = await response.json();
-
-      // Update state with response
-      setCompanyIntelligence(data);
-
-      // If status is "processing", start polling for completion
-      if (data.status === 'processing') {
-        startPolling();
-      }
-    } catch (error) {
-      console.error('Error generating company intelligence:', error);
-      setCompanyIntelligence({ exists: false, status: 'failed', error: 'Failed to generate company intelligence' });
-    } finally {
-      setGeneratingCompanyIntel(false);
-    }
-  }, [leadId, leadPhone, conversation?.client_data?.phone, generatingCompanyIntel, startPolling]);
-
-  // Polling function for processing status
+  // Polling function for processing status (defined first since other callbacks reference it)
   const startPolling = useCallback(() => {
     // Clear any existing polling
     if (companyIntelPollingRef.current) {
@@ -437,6 +382,61 @@ export const ChatPanel = memo(function ChatPanel({
       }
     }, 5000); // Poll every 5 seconds
   }, [leadId, leadPhone, conversation?.client_data?.phone]);
+
+  // Check if company intelligence exists (GET)
+  const checkCompanyIntelligence = useCallback(async () => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!leadId || loadingCompanyIntel) return;
+
+    try {
+      setLoadingCompanyIntel(true);
+      const params = new URLSearchParams();
+      if (phone) params.set('phone', phone);
+
+      const response = await fetch(`/api/leads/${leadId}/company-intelligence?${params}`);
+      const data = await response.json();
+      setCompanyIntelligence(data);
+
+      // Start polling if status is processing
+      if (data.status === 'processing') {
+        startPolling();
+      }
+    } catch (error) {
+      console.error('Error checking company intelligence:', error);
+      setCompanyIntelligence({ exists: false, status: 'failed', error: 'Failed to check company intelligence' });
+    } finally {
+      setLoadingCompanyIntel(false);
+    }
+  }, [leadId, leadPhone, conversation?.client_data?.phone, loadingCompanyIntel, startPolling]);
+
+  // Generate company intelligence (POST) - triggers background generation
+  const generateCompanyIntelligence = useCallback(async (refresh = false) => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!leadId || generatingCompanyIntel) return;
+
+    try {
+      setGeneratingCompanyIntel(true);
+      const response = await fetch(`/api/leads/${leadId}/company-intelligence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh, phone }),
+      });
+      const data = await response.json();
+
+      // Update state with response
+      setCompanyIntelligence(data);
+
+      // If status is "processing", start polling for completion
+      if (data.status === 'processing') {
+        startPolling();
+      }
+    } catch (error) {
+      console.error('Error generating company intelligence:', error);
+      setCompanyIntelligence({ exists: false, status: 'failed', error: 'Failed to generate company intelligence' });
+    } finally {
+      setGeneratingCompanyIntel(false);
+    }
+  }, [leadId, leadPhone, conversation?.client_data?.phone, generatingCompanyIntel, startPolling]);
 
   // Cleanup polling on unmount or lead change
   useEffect(() => {
