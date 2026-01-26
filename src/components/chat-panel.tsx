@@ -378,7 +378,7 @@ export const ChatPanel = memo(function ChatPanel({
     }
   }, [leadId, leadPhone, conversation?.client_data?.phone, loadingCompanyIntel]);
 
-  // Generate company intelligence (POST)
+  // Generate company intelligence (POST) - triggers background generation
   const generateCompanyIntelligence = useCallback(async (refresh = false) => {
     const phone = leadPhone || conversation?.client_data?.phone;
     if (!leadId || generatingCompanyIntel) return;
@@ -392,23 +392,12 @@ export const ChatPanel = memo(function ChatPanel({
       });
       const data = await response.json();
 
-      // Check if generation completed successfully with data
-      if (data.success && data.company) {
-        // Generation completed, show the data directly
-        setCompanyIntelligence({
-          exists: true,
-          status: 'completed',
-          company: data.company,
-          client_id: data.client_id,
-        });
-      } else {
-        // Generation failed or unexpected response
-        setCompanyIntelligence({
-          exists: false,
-          status: 'failed',
-          error: data.error || 'Failed to generate company intelligence',
-          error_code: data.error_code,
-        });
+      // Update state with response
+      setCompanyIntelligence(data);
+
+      // If status is "processing", start polling for completion
+      if (data.status === 'processing') {
+        startPolling();
       }
     } catch (error) {
       console.error('Error generating company intelligence:', error);
@@ -416,7 +405,7 @@ export const ChatPanel = memo(function ChatPanel({
     } finally {
       setGeneratingCompanyIntel(false);
     }
-  }, [leadId, leadPhone, conversation?.client_data?.phone, generatingCompanyIntel]);
+  }, [leadId, leadPhone, conversation?.client_data?.phone, generatingCompanyIntel, startPolling]);
 
   // Polling function for processing status
   const startPolling = useCallback(() => {
@@ -3123,13 +3112,24 @@ function CompanyIntelligenceTab({
 
   // Status: failed - Show error with retry
   if (data?.status === 'failed') {
-    const errorMessage = data.error_code === 'NO_EMAIL' ? 'No email address found for this contact.' :
-      data.error_code === 'PERSONAL_EMAIL' ? 'Contact has a personal email (Gmail, Yahoo, etc). A business email is required.' :
-      data.error_code === 'CLIENT_NOT_FOUND' ? 'Contact not found in the system.' :
-      data.error_code === 'SCRAPE_FAILED' ? 'Failed to analyze the company website.' :
-      data.error_code === 'ANALYSIS_FAILED' ? 'Failed to generate company analysis.' :
-      data.error_code === 'PITCH_FAILED' ? 'Failed to generate sales pitch.' :
-      (typeof data.error === 'string' ? data.error : 'An unexpected error occurred.');
+    // Determine error message based on error code
+    const errorMessages: Record<string, string> = {
+      'NO_EMAIL': 'No email address found for this contact.',
+      'PERSONAL_EMAIL': 'Contact has a personal email (Gmail, Yahoo, etc). A business email is required.',
+      'INVALID_EMAIL': 'Could not extract domain from the email address.',
+      'CLIENT_NOT_FOUND': 'Contact not found in the system.',
+      'SCRAPE_FAILED': 'Failed to analyze the company website.',
+      'ANALYSIS_FAILED': 'Failed to generate company analysis.',
+      'PITCH_FAILED': 'Failed to generate sales pitch.',
+      'GENERATION_FAILED': data.message || 'Previous generation attempt failed.',
+    };
+    const errorMessage = data.error_code && errorMessages[data.error_code]
+      ? errorMessages[data.error_code]
+      : (typeof data.error === 'string' ? data.error : data.message || 'An unexpected error occurred.');
+
+    // Errors that cannot be retried (email issues)
+    const nonRetryableErrors = ['NO_EMAIL', 'PERSONAL_EMAIL', 'INVALID_EMAIL', 'CLIENT_NOT_FOUND'];
+    const canRetry = !data.error_code || !nonRetryableErrors.includes(data.error_code);
 
     return (
       <div className="flex-1 overflow-y-auto p-4">
@@ -3139,7 +3139,7 @@ function CompanyIntelligenceTab({
             <div className="flex-1">
               <h4 className="font-medium text-red-800">Unable to generate intelligence</h4>
               <p className="text-sm text-red-600 mt-1">{errorMessage}</p>
-              {data.error_code !== 'NO_EMAIL' && data.error_code !== 'PERSONAL_EMAIL' && (
+              {canRetry && (
                 <Button
                   variant="outline"
                   size="sm"
