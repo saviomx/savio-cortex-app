@@ -209,20 +209,20 @@ export default function FunnelMetricsPage() {
       <div className="flex-1 overflow-auto p-6 pb-20 md:pb-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Page Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <TrendingUp className="w-7 h-7 text-indigo-600" />
-                CRM Funnel Metrics
-              </h1>
-              <p className="text-gray-500">Track your sales funnel volume and conversion rates</p>
-            </div>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" />
+                  CRM Funnel Metrics
+                </h1>
+                <p className="text-sm sm:text-base text-gray-500 mt-1">Track your sales funnel volume and conversion rates</p>
+              </div>
 
-            <div className="flex items-center gap-3">
-              {/* Last Updated & Refresh */}
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Last Updated */}
                 {lastFetched && (
-                  <span className="flex items-center gap-1">
+                  <span className="hidden sm:flex items-center gap-1 text-sm text-gray-500">
                     <Clock className="w-3.5 h-3.5" />
                     {formatLastUpdated(lastFetched)}
                   </span>
@@ -235,23 +235,23 @@ export default function FunnelMetricsPage() {
                   className="gap-1.5"
                 >
                   <RefreshCw className={cn('w-4 h-4', isValidating && 'animate-spin')} />
-                  Refresh
+                  <span className="hidden sm:inline">Refresh</span>
                 </Button>
-              </div>
 
-              <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-                <SelectTrigger className="w-[180px]">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="14d">Last 14 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="90d">Last 90 days</SelectItem>
-                  <SelectItem value="180d">Last 180 days</SelectItem>
-                </SelectContent>
-              </Select>
+                <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
+                  <SelectTrigger className="w-[140px] sm:w-[160px]">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                    <SelectItem value="14d">Last 14 days</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                    <SelectItem value="90d">Last 90 days</SelectItem>
+                    <SelectItem value="180d">Last 180 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 

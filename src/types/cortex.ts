@@ -938,3 +938,96 @@ export interface AgentArchitectureResponse {
   state_fields: Record<string, string>[];
   node_id_mapping?: Record<string, string>;
 }
+
+// =============================================================================
+// Company Intelligence Types
+// =============================================================================
+
+export interface CompanyLocation {
+  country?: string;
+  city?: string;
+  state?: string;
+}
+
+export interface CompanySize {
+  estimate?: string;
+  confidence?: 'low' | 'medium' | 'high';
+}
+
+export interface TargetCustomer {
+  segment?: string;
+  description?: string;
+}
+
+export interface CompanyOverview {
+  company_name?: string;
+  vertical?: string;
+  location?: CompanyLocation;
+  company_size?: CompanySize;
+  target_customer?: TargetCustomer;
+  pain_points?: string[];
+  recurring_revenue_likelihood?: 'low' | 'medium' | 'high';
+  estimated_invoice_volume?: string;
+  // Additional fields from company intelligence scraping
+  what_they_do?: string;
+  who_they_help?: string;
+  key_products?: string[];
+  differentiators?: string[];
+}
+
+export interface ObjectionHandler {
+  objection?: string;
+  response?: string;
+}
+
+export interface PsychologicalApproach {
+  communication_style?: string;
+  decision_drivers?: string[];
+  trust_builders?: string[];
+}
+
+export interface SalesPitch {
+  fit_score?: number;
+  fit_analysis?: string;
+  fit_reasoning?: string;
+  value_proposition?: string;
+  key_talking_points?: string[];
+  talking_points?: string[];
+  objection_handlers?: ObjectionHandler[];
+  discovery_questions?: string[];
+  psychological_approach?: PsychologicalApproach;
+  next_steps?: string[];
+}
+
+export interface CompanyIntelligence {
+  id?: number;
+  name?: string;
+  website?: string;
+  domain?: string;
+  overview?: CompanyOverview;
+  sales_pitch?: SalesPitch;
+  scrape_status?: 'pending' | 'scraping' | 'completed' | 'failed';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CompanyIntelligenceResponse {
+  success: boolean;
+  company?: CompanyIntelligence;
+  client_id?: number;
+  from_cache?: boolean;
+  error?: string;
+  error_code?: 'CLIENT_NOT_FOUND' | 'NO_EMAIL' | 'PERSONAL_EMAIL' | 'SCRAPE_FAILED' | 'ANALYSIS_FAILED' | 'PITCH_FAILED';
+}
+
+export type CompanyIntelligenceStatus = 'not_found' | 'processing' | 'completed' | 'failed';
+
+export interface CompanyIntelligenceCheckResponse {
+  exists: boolean;
+  status: CompanyIntelligenceStatus;
+  company?: CompanyIntelligence;
+  client_id?: number;
+  message?: string;
+  error?: string;
+  error_code?: string;
+}

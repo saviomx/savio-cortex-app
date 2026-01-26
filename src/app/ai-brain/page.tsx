@@ -252,37 +252,35 @@ export default function AIBrainPage() {
       <div className="flex-1 overflow-auto p-6 pb-20 md:pb-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Page Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <Brain className="w-7 h-7 text-indigo-600" />
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <Brain className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" />
                 AI Brain
               </h1>
-              <p className="text-gray-500">
+              <p className="text-sm sm:text-base text-gray-500 mt-1">
                 Multi-agent architecture and prompt system
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Last Updated & Refresh */}
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                {lastFetched && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {formatLastUpdated(lastFetched)}
-                  </span>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={archValidating}
-                  className="gap-1.5"
-                >
-                  <RefreshCw className={cn('w-4 h-4', archValidating && 'animate-spin')} />
-                  Refresh
-                </Button>
-              </div>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Last Updated */}
+              {lastFetched && (
+                <span className="hidden sm:flex items-center gap-1 text-sm text-gray-500">
+                  <Clock className="w-3.5 h-3.5" />
+                  {formatLastUpdated(lastFetched)}
+                </span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={archValidating}
+                className="gap-1.5"
+              >
+                <RefreshCw className={cn('w-4 h-4', archValidating && 'animate-spin')} />
+                <span className="hidden sm:inline">Refresh</span>
+              </Button>
             </div>
           </div>
 

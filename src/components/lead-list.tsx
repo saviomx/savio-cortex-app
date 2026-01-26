@@ -457,10 +457,18 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
                       </div>
                     </div>
 
-                    {/* Time */}
-                    <span className="text-xs text-gray-400 flex-shrink-0">
-                      {formatTimeAgo(lead.last_message_at || lead.updated_at)}
-                    </span>
+                    {/* Time & Message Count */}
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className="text-xs text-gray-400">
+                        {formatTimeAgo(lead.last_message_at || lead.updated_at)}
+                      </span>
+                      {lead.messages_count != null && lead.messages_count > 0 && (
+                        <span className="flex items-center gap-0.5 text-xs text-gray-400">
+                          <MessageCircle className="w-3 h-3" />
+                          {lead.messages_count}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               );
