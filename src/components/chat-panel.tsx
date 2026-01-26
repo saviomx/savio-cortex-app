@@ -3324,15 +3324,34 @@ function CompanyIntelligenceTab({
                     <HelpCircle className="w-5 h-5 text-purple-600" />
                     <h4 className="font-semibold text-gray-900">Discovery Questions</h4>
                   </div>
-                  <ul className="space-y-2">
-                    {company.sales_pitch.discovery_questions.map((question, index) => (
-                      <li key={index} className="flex items-start gap-2 text-sm">
-                        <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0 text-xs font-medium">
-                          {index + 1}
-                        </span>
-                        <span className="text-gray-700">{question}</span>
-                      </li>
-                    ))}
+                  <ul className="space-y-3">
+                    {company.sales_pitch.discovery_questions.map((q, index) => {
+                      // Handle both string and object formats
+                      const questionText = typeof q === 'string' ? q : q.question;
+                      const idealAnswer = typeof q === 'object' ? q.ideal_answer_leads_to : null;
+                      const savioFeature = typeof q === 'object' ? q.connects_to_savio_feature : null;
+
+                      return (
+                        <li key={index} className="flex items-start gap-2 text-sm">
+                          <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0 text-xs font-medium mt-0.5">
+                            {index + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-gray-700 font-medium">{questionText}</p>
+                            {idealAnswer && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                <span className="font-medium">Ideal answer:</span> {idealAnswer}
+                              </p>
+                            )}
+                            {savioFeature && (
+                              <p className="text-xs text-purple-600 mt-0.5">
+                                → {savioFeature}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}
