@@ -3365,8 +3365,10 @@ function CompanyIntelligenceTab({
             <>
               {/* Fit Score */}
               {(() => {
-                const fitScore = company.sales_pitch.fit_score ?? company.sales_pitch.fit_analysis?.score;
-                const fitReasoning = company.sales_pitch.fit_reasoning ?? company.sales_pitch.fit_analysis?.score_reasoning;
+                const fitAnalysis = company.sales_pitch.fit_analysis;
+                const fitAnalysisObj = typeof fitAnalysis === 'object' && fitAnalysis !== null ? fitAnalysis : null;
+                const fitScore = company.sales_pitch.fit_score ?? fitAnalysisObj?.score;
+                const fitReasoning = company.sales_pitch.fit_reasoning ?? fitAnalysisObj?.score_reasoning;
                 const fitScoreNum = typeof fitScore === 'number' ? (fitScore > 10 ? fitScore : fitScore * 10) : 0;
 
                 return fitScore !== undefined && (
@@ -3407,24 +3409,31 @@ function CompanyIntelligenceTab({
 
               {/* Value Proposition */}
               {company.sales_pitch.value_proposition && (
-                <div className="bg-white border rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target className="w-5 h-5 text-indigo-600" />
-                    <h4 className="font-semibold text-gray-900">Value Proposition</h4>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    {company.sales_pitch.value_proposition.elevator_pitch && (
-                      <p className="text-gray-700 bg-indigo-50 p-3 rounded-lg italic">
-                        &ldquo;{company.sales_pitch.value_proposition.elevator_pitch}&rdquo;
-                      </p>
-                    )}
-                    {company.sales_pitch.value_proposition.primary_message && (
-                      <p className="text-gray-600">
-                        <span className="font-medium">Key message:</span> {company.sales_pitch.value_proposition.primary_message}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                (() => {
+                  const vp = company.sales_pitch.value_proposition;
+                  const vpObj = typeof vp === 'object' && vp !== null ? vp : null;
+                  if (!vpObj) return null;
+                  return (
+                    <div className="bg-white border rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Target className="w-5 h-5 text-indigo-600" />
+                        <h4 className="font-semibold text-gray-900">Value Proposition</h4>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        {vpObj.elevator_pitch && (
+                          <p className="text-gray-700 bg-indigo-50 p-3 rounded-lg italic">
+                            &ldquo;{vpObj.elevator_pitch}&rdquo;
+                          </p>
+                        )}
+                        {vpObj.primary_message && (
+                          <p className="text-gray-600">
+                            <span className="font-medium">Key message:</span> {vpObj.primary_message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
               )}
 
               {/* ROI Talking Points */}
@@ -3435,7 +3444,7 @@ function CompanyIntelligenceTab({
                     <h4 className="font-semibold text-gray-900">ROI Impact</h4>
                   </div>
                   <div className="space-y-2">
-                    {company.sales_pitch.roi_talking_points.map((roi: { metric: string; current_estimate: string; with_savio: string }, index: number) => (
+                    {company.sales_pitch.roi_talking_points.map((roi, index) => (
                       <div key={index} className="flex items-center justify-between bg-green-50 p-3 rounded-lg text-sm">
                         <span className="font-medium text-gray-700">{roi.metric}</span>
                         <div className="flex items-center gap-2">
@@ -3457,7 +3466,7 @@ function CompanyIntelligenceTab({
                     <h4 className="font-semibold text-gray-900">Features to Demo</h4>
                   </div>
                   <div className="space-y-3">
-                    {company.sales_pitch.savio_features_to_highlight.map((feature: { feature: string; relevance_to_prospect: string; demo_talking_point: string }, index: number) => (
+                    {company.sales_pitch.savio_features_to_highlight.map((feature, index) => (
                       <div key={index} className="bg-blue-50 p-3 rounded-lg">
                         <p className="font-medium text-blue-800 text-sm">{feature.feature}</p>
                         <p className="text-xs text-gray-600 mt-1">{feature.relevance_to_prospect}</p>
@@ -3478,7 +3487,7 @@ function CompanyIntelligenceTab({
                     <h4 className="font-semibold text-gray-900">Conversation Starters</h4>
                   </div>
                   <div className="space-y-3">
-                    {company.sales_pitch.conversation_starters.map((starter: { context?: string; opener?: string; transition_to_discovery?: string; hook?: string; follow_up?: string }, index: number) => (
+                    {company.sales_pitch.conversation_starters.map((starter, index) => (
                       <div key={index} className="bg-teal-50 p-3 rounded-lg">
                         {starter.context && (
                           <span className="text-xs bg-teal-200 text-teal-800 px-2 py-0.5 rounded-full mb-2 inline-block">
@@ -3626,7 +3635,7 @@ function CompanyIntelligenceTab({
                       <h4 className="font-semibold text-gray-900">Objection Handlers</h4>
                     </div>
                     <div className="space-y-3">
-                      {objections.map((handler: { objection: string; response?: string; likelihood?: string; response_using_savio_info?: string }, index: number) => (
+                      {objections.map((handler, index) => (
                         <div key={index} className="bg-gray-50 rounded-lg p-3">
                           <div className="flex items-start justify-between">
                             <p className="text-sm font-medium text-gray-800 mb-1">

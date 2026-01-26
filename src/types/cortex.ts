@@ -952,22 +952,69 @@ export interface CompanyLocation {
 export interface CompanySize {
   estimate?: string;
   confidence?: 'low' | 'medium' | 'high';
+  category?: string;
+  employee_range?: string;
 }
 
 export interface TargetCustomer {
   segment?: string;
   description?: string;
+  type?: string;
+  segments?: string[];
+}
+
+export interface PainPointInferred {
+  pain_point: string;
+  confidence?: string;
+  evidence?: string;
+}
+
+export interface ProductService {
+  name: string;
+  description?: string;
+  pricing_model?: string;
+}
+
+export interface DecisionMakerProfile {
+  likely_title?: string;
+  likely_concerns?: string[];
+  likely_objections?: string[];
+  primary_concerns?: string[];
+}
+
+export interface BusinessModelIndicators {
+  invoice_volume_estimate?: {
+    score?: string;
+    reasoning?: string;
+  };
+  recurring_revenue_potential?: string;
+}
+
+export interface TechnologyIndicators {
+  website_tech_stack?: string[];
+  tech_sophistication?: string;
+  existing_tools_mentioned?: string[];
+  api_integrations_likely?: boolean;
 }
 
 export interface CompanyOverview {
   company_name?: string;
   vertical?: string;
+  industry_vertical?: string;
+  sub_vertical?: string;
   location?: CompanyLocation;
   company_size?: CompanySize;
+  company_size_estimate?: CompanySize;
   target_customer?: TargetCustomer;
   pain_points?: string[];
+  pain_points_inferred?: (string | PainPointInferred)[];
   recurring_revenue_likelihood?: 'low' | 'medium' | 'high';
   estimated_invoice_volume?: string;
+  products_services?: (string | ProductService)[];
+  key_differentiators?: (string | Record<string, unknown>)[];
+  decision_maker_profile?: DecisionMakerProfile;
+  business_model_indicators?: BusinessModelIndicators;
+  technology_indicators?: TechnologyIndicators;
   // Additional fields from company intelligence scraping
   what_they_do?: string;
   who_they_help?: string;
@@ -978,25 +1025,86 @@ export interface CompanyOverview {
 export interface ObjectionHandler {
   objection?: string;
   response?: string;
+  likelihood?: string;
+  response_using_savio_info?: string;
 }
 
 export interface PsychologicalApproach {
   communication_style?: string;
   decision_drivers?: string[];
   trust_builders?: string[];
+  buyer_archetype?: string;
+  trust_building_strategy?: string;
+  closing_technique?: string;
+}
+
+export interface FitAnalysis {
+  score?: number;
+  score_reasoning?: string;
+}
+
+export interface ValueProposition {
+  elevator_pitch?: string;
+  primary_message?: string;
+  key_benefits?: string[];
+}
+
+export interface ROITalkingPoint {
+  metric?: string;
+  current_estimate?: string;
+  with_savio?: string;
+}
+
+export interface SavioFeature {
+  feature?: string;
+  relevance_to_prospect?: string;
+  demo_talking_point?: string;
+}
+
+export interface ConversationStarter {
+  context?: string;
+  opener?: string;
+  transition_to_discovery?: string;
+  hook?: string;
+  follow_up?: string;
+}
+
+export interface DiscoveryQuestion {
+  question?: string;
+  ideal_answer_leads_to?: string;
+  connects_to_savio_feature?: string;
+}
+
+export interface CompetitivePositioning {
+  likely_current_solution?: string;
+  likely_alternatives?: string[];
+  how_to_differentiate?: string;
+  savio_advantages?: (string | Record<string, unknown>)[];
+  potential_weaknesses?: (string | Record<string, unknown>)[];
+}
+
+export interface NextSteps {
+  recommended_action?: string;
+  how_to_propose?: string;
+  urgency_angle?: string;
 }
 
 export interface SalesPitch {
   fit_score?: number;
-  fit_analysis?: string;
+  fit_analysis?: string | FitAnalysis;
   fit_reasoning?: string;
-  value_proposition?: string;
+  value_proposition?: string | ValueProposition;
   key_talking_points?: string[];
-  talking_points?: string[];
+  talking_points?: (string | Record<string, unknown>)[];
   objection_handlers?: ObjectionHandler[];
-  discovery_questions?: string[];
+  objection_handling?: ObjectionHandler[];
+  discovery_questions?: (string | DiscoveryQuestion)[];
   psychological_approach?: PsychologicalApproach;
-  next_steps?: string[];
+  next_steps?: string[] | NextSteps;
+  roi_talking_points?: ROITalkingPoint[];
+  savio_features_to_highlight?: SavioFeature[];
+  conversation_starters?: ConversationStarter[];
+  competitive_positioning?: CompetitivePositioning;
 }
 
 export interface CompanyIntelligence {
