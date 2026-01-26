@@ -45,6 +45,7 @@ import {
   HelpCircle,
   ArrowRight,
   AlertCircle,
+  Brain,
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
@@ -3182,94 +3183,415 @@ function CompanyIntelligenceTab({
           </Button>
         </div>
 
-        <div className="space-y-6">
-          {/* Company Overview */}
-          {company.overview && (
-            <div className="bg-white border rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Building className="w-5 h-5 text-blue-600" />
-                <h4 className="font-semibold text-gray-900">
-                  {company.name || 'Company Overview'}
-                </h4>
-              </div>
-              {company.website && (
-                <a
-                  href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-3"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  {company.domain || company.website}
-                </a>
-              )}
-              <div className="space-y-3 text-sm">
-                {company.overview.what_they_do && (
-                  <div>
-                    <span className="font-medium text-gray-700">What they do: </span>
-                    <span className="text-gray-600">{company.overview.what_they_do}</span>
-                  </div>
-                )}
-                {company.overview.who_they_help && (
-                  <div>
-                    <span className="font-medium text-gray-700">Who they help: </span>
-                    <span className="text-gray-600">{company.overview.who_they_help}</span>
-                  </div>
-                )}
-                {company.overview.key_products && company.overview.key_products.length > 0 && (
-                  <div>
-                    <span className="font-medium text-gray-700">Key products/services: </span>
-                    <span className="text-gray-600">{company.overview.key_products.join(', ')}</span>
-                  </div>
-                )}
-                {company.overview.differentiators && company.overview.differentiators.length > 0 && (
-                  <div>
-                    <span className="font-medium text-gray-700">Differentiators: </span>
-                    <span className="text-gray-600">{company.overview.differentiators.join(', ')}</span>
-                  </div>
-                )}
-              </div>
+        <div className="space-y-4">
+          {/* Company Header */}
+          <div className="bg-white border rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Building className="w-5 h-5 text-blue-600" />
+              <h4 className="font-semibold text-gray-900">
+                {company.name || company.overview?.company_name || 'Company'}
+              </h4>
             </div>
-          )}
+            {company.website && (
+              <a
+                href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-3"
+              >
+                <ExternalLink className="w-3 h-3" />
+                {company.domain || company.website}
+              </a>
+            )}
+
+            {/* Company Info Grid */}
+            {company.overview && (
+              <div className="grid grid-cols-2 gap-3 text-sm mt-3">
+                {company.overview.industry_vertical && (
+                  <div>
+                    <span className="text-gray-500">Industry:</span>
+                    <p className="font-medium text-gray-800">{company.overview.industry_vertical}</p>
+                  </div>
+                )}
+                {company.overview.sub_vertical && (
+                  <div>
+                    <span className="text-gray-500">Sub-vertical:</span>
+                    <p className="font-medium text-gray-800">{company.overview.sub_vertical}</p>
+                  </div>
+                )}
+                {company.overview.location && (
+                  <div>
+                    <span className="text-gray-500">Location:</span>
+                    <p className="font-medium text-gray-800">
+                      {[company.overview.location.city, company.overview.location.state, company.overview.location.country].filter(Boolean).join(', ')}
+                    </p>
+                  </div>
+                )}
+                {company.overview.company_size_estimate && (
+                  <div>
+                    <span className="text-gray-500">Company Size:</span>
+                    <p className="font-medium text-gray-800">{company.overview.company_size_estimate.category}</p>
+                  </div>
+                )}
+                {company.overview.target_customer?.type && (
+                  <div>
+                    <span className="text-gray-500">Business Type:</span>
+                    <p className="font-medium text-gray-800">{company.overview.target_customer.type}</p>
+                  </div>
+                )}
+                {company.overview.business_model_indicators?.invoice_volume_estimate?.score && (
+                  <div>
+                    <span className="text-gray-500">Invoice Volume:</span>
+                    <p className="font-medium text-gray-800">{company.overview.business_model_indicators.invoice_volume_estimate.score}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Products/Services - handles both string[] and object[] formats */}
+            {company.overview?.products_services && company.overview.products_services.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium text-gray-700 mb-2">Products & Services</p>
+                <div className="space-y-2">
+                  {company.overview.products_services.map((item: string | { name: string; description?: string; pricing_model?: string }, index: number) => {
+                    if (typeof item === 'string') {
+                      return (
+                        <span key={index} className="inline-block text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full mr-1.5 mb-1">
+                          {item}
+                        </span>
+                      );
+                    }
+                    return (
+                      <div key={index} className="bg-gray-50 p-2 rounded-lg text-sm">
+                        <p className="font-medium text-gray-800">{item.name}</p>
+                        {item.description && <p className="text-gray-600 text-xs mt-0.5">{item.description}</p>}
+                        {item.pricing_model && <p className="text-gray-500 text-xs mt-0.5">Pricing: {item.pricing_model}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Key Differentiators */}
+            {company.overview?.key_differentiators && company.overview.key_differentiators.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium text-gray-700 mb-2">Key Differentiators</p>
+                <ul className="space-y-1.5">
+                  {company.overview.key_differentiators.map((item: string | Record<string, unknown>, index: number) => (
+                    <li key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                      <span className="text-green-500 mt-0.5">✓</span>
+                      {typeof item === 'string' ? item : JSON.stringify(item)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Pain Points */}
+            {company.overview?.pain_points_inferred && company.overview.pain_points_inferred.length > 0 && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium text-gray-700 mb-2">Identified Pain Points</p>
+                <div className="space-y-2">
+                  {company.overview.pain_points_inferred.map((item: string | { pain_point: string; confidence?: string; evidence?: string }, index: number) => {
+                    if (typeof item === 'string') {
+                      return (
+                        <div key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                          <span className="text-amber-500 mt-0.5">•</span>
+                          {item}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={index} className="bg-amber-50 p-2 rounded-lg text-sm">
+                        <div className="flex items-start justify-between">
+                          <p className="text-gray-700 font-medium">{item.pain_point}</p>
+                          {item.confidence && (
+                            <span className={cn(
+                              "text-xs px-2 py-0.5 rounded-full",
+                              item.confidence.toLowerCase() === 'alta' ? "bg-red-100 text-red-700" :
+                              item.confidence.toLowerCase() === 'media' ? "bg-amber-100 text-amber-700" :
+                              "bg-gray-100 text-gray-600"
+                            )}>
+                              {item.confidence}
+                            </span>
+                          )}
+                        </div>
+                        {item.evidence && <p className="text-xs text-gray-500 mt-1">{item.evidence}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Decision Maker Profile */}
+            {company.overview?.decision_maker_profile && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm font-medium text-gray-700 mb-2">Decision Maker Profile</p>
+                <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-2">
+                  {company.overview.decision_maker_profile.likely_title && (
+                    <p className="text-gray-700">
+                      <span className="font-medium">Likely Title:</span> {company.overview.decision_maker_profile.likely_title}
+                    </p>
+                  )}
+                  {(company.overview.decision_maker_profile.likely_concerns || company.overview.decision_maker_profile.primary_concerns) && (
+                    <div>
+                      <span className="font-medium text-gray-700">Likely Concerns:</span>
+                      <ul className="mt-1 ml-4">
+                        {(company.overview.decision_maker_profile.likely_concerns || company.overview.decision_maker_profile.primary_concerns || []).map((concern: string, index: number) => (
+                          <li key={index} className="text-gray-600 list-disc">{concern}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {company.overview.decision_maker_profile.likely_objections && company.overview.decision_maker_profile.likely_objections.length > 0 && (
+                    <div>
+                      <span className="font-medium text-gray-700">Likely Objections:</span>
+                      <ul className="mt-1 ml-4">
+                        {company.overview.decision_maker_profile.likely_objections.map((objection: string, index: number) => (
+                          <li key={index} className="text-gray-600 list-disc">{objection}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Sales Pitch */}
           {company.sales_pitch && (
             <>
               {/* Fit Score */}
-              {company.sales_pitch.fit_score !== undefined && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-gray-900">Fit Score</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={cn(
-                            "h-full rounded-full",
-                            company.sales_pitch.fit_score >= 80 ? "bg-green-500" :
-                            company.sales_pitch.fit_score >= 60 ? "bg-blue-500" :
-                            company.sales_pitch.fit_score >= 40 ? "bg-amber-500" : "bg-red-500"
-                          )}
-                          style={{ width: `${company.sales_pitch.fit_score}%` }}
-                        />
+              {(() => {
+                const fitScore = company.sales_pitch.fit_score ?? company.sales_pitch.fit_analysis?.score;
+                const fitReasoning = company.sales_pitch.fit_reasoning ?? company.sales_pitch.fit_analysis?.score_reasoning;
+                const fitScoreNum = typeof fitScore === 'number' ? (fitScore > 10 ? fitScore : fitScore * 10) : 0;
+
+                return fitScore !== undefined && (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5 text-blue-600" />
+                        <span className="font-semibold text-gray-900">Fit Score</span>
                       </div>
-                      <span className={cn(
-                        "font-bold text-lg",
-                        company.sales_pitch.fit_score >= 80 ? "text-green-600" :
-                        company.sales_pitch.fit_score >= 60 ? "text-blue-600" :
-                        company.sales_pitch.fit_score >= 40 ? "text-amber-600" : "text-red-600"
-                      )}>
-                        {company.sales_pitch.fit_score}%
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full",
+                              fitScoreNum >= 80 ? "bg-green-500" :
+                              fitScoreNum >= 60 ? "bg-blue-500" :
+                              fitScoreNum >= 40 ? "bg-amber-500" : "bg-red-500"
+                            )}
+                            style={{ width: `${fitScoreNum}%` }}
+                          />
+                        </div>
+                        <span className={cn(
+                          "font-bold text-lg",
+                          fitScoreNum >= 80 ? "text-green-600" :
+                          fitScoreNum >= 60 ? "text-blue-600" :
+                          fitScoreNum >= 40 ? "text-amber-600" : "text-red-600"
+                        )}>
+                          {fitScore}/10
+                        </span>
+                      </div>
                     </div>
+                    {fitReasoning && (
+                      <p className="text-sm text-gray-600 mt-2">{fitReasoning}</p>
+                    )}
                   </div>
-                  {(company.sales_pitch.fit_reasoning || company.sales_pitch.fit_analysis) && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      {company.sales_pitch.fit_reasoning || company.sales_pitch.fit_analysis}
-                    </p>
-                  )}
+                );
+              })()}
+
+              {/* Value Proposition */}
+              {company.sales_pitch.value_proposition && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target className="w-5 h-5 text-indigo-600" />
+                    <h4 className="font-semibold text-gray-900">Value Proposition</h4>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {company.sales_pitch.value_proposition.elevator_pitch && (
+                      <p className="text-gray-700 bg-indigo-50 p-3 rounded-lg italic">
+                        &ldquo;{company.sales_pitch.value_proposition.elevator_pitch}&rdquo;
+                      </p>
+                    )}
+                    {company.sales_pitch.value_proposition.primary_message && (
+                      <p className="text-gray-600">
+                        <span className="font-medium">Key message:</span> {company.sales_pitch.value_proposition.primary_message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ROI Talking Points */}
+              {company.sales_pitch.roi_talking_points && company.sales_pitch.roi_talking_points.length > 0 && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <h4 className="font-semibold text-gray-900">ROI Impact</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {company.sales_pitch.roi_talking_points.map((roi: { metric: string; current_estimate: string; with_savio: string }, index: number) => (
+                      <div key={index} className="flex items-center justify-between bg-green-50 p-3 rounded-lg text-sm">
+                        <span className="font-medium text-gray-700">{roi.metric}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500 line-through">{roi.current_estimate}</span>
+                          <ArrowRight className="w-4 h-4 text-green-600" />
+                          <span className="font-bold text-green-700">{roi.with_savio}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Savio Features to Highlight */}
+              {company.sales_pitch.savio_features_to_highlight && company.sales_pitch.savio_features_to_highlight.length > 0 && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="w-5 h-5 text-blue-600" />
+                    <h4 className="font-semibold text-gray-900">Features to Demo</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {company.sales_pitch.savio_features_to_highlight.map((feature: { feature: string; relevance_to_prospect: string; demo_talking_point: string }, index: number) => (
+                      <div key={index} className="bg-blue-50 p-3 rounded-lg">
+                        <p className="font-medium text-blue-800 text-sm">{feature.feature}</p>
+                        <p className="text-xs text-gray-600 mt-1">{feature.relevance_to_prospect}</p>
+                        {feature.demo_talking_point && (
+                          <p className="text-xs text-blue-600 mt-1 italic">Demo tip: {feature.demo_talking_point}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Conversation Starters */}
+              {company.sales_pitch.conversation_starters && company.sales_pitch.conversation_starters.length > 0 && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MessageCircle className="w-5 h-5 text-teal-600" />
+                    <h4 className="font-semibold text-gray-900">Conversation Starters</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {company.sales_pitch.conversation_starters.map((starter: { context?: string; opener?: string; transition_to_discovery?: string; hook?: string; follow_up?: string }, index: number) => (
+                      <div key={index} className="bg-teal-50 p-3 rounded-lg">
+                        {starter.context && (
+                          <span className="text-xs bg-teal-200 text-teal-800 px-2 py-0.5 rounded-full mb-2 inline-block">
+                            {starter.context}
+                          </span>
+                        )}
+                        <p className="text-sm font-medium text-teal-800">
+                          &ldquo;{starter.opener || starter.hook}&rdquo;
+                        </p>
+                        {(starter.transition_to_discovery || starter.follow_up) && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            → {starter.transition_to_discovery || starter.follow_up}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Psychological Approach */}
+              {company.sales_pitch.psychological_approach && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Brain className="w-5 h-5 text-violet-600" />
+                    <h4 className="font-semibold text-gray-900">Psychological Approach</h4>
+                  </div>
+                  <div className="space-y-3 text-sm">
+                    {company.sales_pitch.psychological_approach.buyer_archetype && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 w-28 flex-shrink-0">Buyer Type:</span>
+                        <span className="text-gray-600">{company.sales_pitch.psychological_approach.buyer_archetype}</span>
+                      </div>
+                    )}
+                    {company.sales_pitch.psychological_approach.trust_building_strategy && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 w-28 flex-shrink-0">Build Trust:</span>
+                        <span className="text-gray-600">{company.sales_pitch.psychological_approach.trust_building_strategy}</span>
+                      </div>
+                    )}
+                    {company.sales_pitch.psychological_approach.communication_style && (
+                      <div className="flex items-start gap-2">
+                        <span className="font-medium text-gray-700 w-28 flex-shrink-0">Comm Style:</span>
+                        <span className="text-gray-600">{company.sales_pitch.psychological_approach.communication_style}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Competitive Positioning */}
+              {company.sales_pitch.competitive_positioning && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target className="w-5 h-5 text-orange-600" />
+                    <h4 className="font-semibold text-gray-900">Competitive Positioning</h4>
+                  </div>
+                  <div className="space-y-3 text-sm">
+                    {/* Handle both likely_current_solution and likely_alternatives */}
+                    {company.sales_pitch.competitive_positioning.likely_current_solution && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="font-medium text-gray-700">Current Solution</p>
+                        <p className="text-gray-600 mt-1">{company.sales_pitch.competitive_positioning.likely_current_solution}</p>
+                      </div>
+                    )}
+                    {company.sales_pitch.competitive_positioning.likely_alternatives && company.sales_pitch.competitive_positioning.likely_alternatives.length > 0 && (
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="font-medium text-gray-700 mb-2">Likely Alternatives</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {company.sales_pitch.competitive_positioning.likely_alternatives.map((alt: string, index: number) => (
+                            <span key={index} className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-full">
+                              {alt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* How to differentiate */}
+                    {company.sales_pitch.competitive_positioning.how_to_differentiate && (
+                      <div className="bg-green-50 p-3 rounded-lg">
+                        <p className="font-medium text-green-700">How to Differentiate</p>
+                        <p className="text-gray-600 mt-1">{company.sales_pitch.competitive_positioning.how_to_differentiate}</p>
+                      </div>
+                    )}
+                    {/* Legacy: savio_advantages */}
+                    {company.sales_pitch.competitive_positioning.savio_advantages && company.sales_pitch.competitive_positioning.savio_advantages.length > 0 && (
+                      <div className="bg-green-50 p-3 rounded-lg">
+                        <p className="font-medium text-green-700 mb-2">Savio Advantages</p>
+                        <ul className="space-y-1">
+                          {company.sales_pitch.competitive_positioning.savio_advantages.map((adv: string | Record<string, unknown>, index: number) => (
+                            <li key={index} className="flex items-start gap-2 text-gray-600">
+                              <span className="text-green-500">✓</span>
+                              {typeof adv === 'string' ? adv : JSON.stringify(adv)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Legacy: potential_weaknesses */}
+                    {company.sales_pitch.competitive_positioning.potential_weaknesses && company.sales_pitch.competitive_positioning.potential_weaknesses.length > 0 && (
+                      <div className="bg-amber-50 p-3 rounded-lg">
+                        <p className="font-medium text-amber-700 mb-2">Watch Out For</p>
+                        <ul className="space-y-1">
+                          {company.sales_pitch.competitive_positioning.potential_weaknesses.map((weak: string | Record<string, unknown>, index: number) => (
+                            <li key={index} className="flex items-start gap-2 text-gray-600">
+                              <span className="text-amber-500">!</span>
+                              {typeof weak === 'string' ? weak : JSON.stringify(weak)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -3283,10 +3605,10 @@ function CompanyIntelligenceTab({
                       <h4 className="font-semibold text-gray-900">Talking Points</h4>
                     </div>
                     <ul className="space-y-2">
-                      {talkingPoints.map((point: string, index: number) => (
+                      {talkingPoints.map((point: string | Record<string, unknown>, index: number) => (
                         <li key={index} className="flex items-start gap-2 text-sm">
                           <ArrowRight className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                          <span className="text-gray-700">{point}</span>
+                          <span className="text-gray-700">{typeof point === 'string' ? point : JSON.stringify(point)}</span>
                         </li>
                       ))}
                     </ul>
@@ -3294,28 +3616,43 @@ function CompanyIntelligenceTab({
                 );
               })()}
 
-              {/* Objection Handlers */}
-              {company.sales_pitch.objection_handlers && company.sales_pitch.objection_handlers.length > 0 && (
-                <div className="bg-white border rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600" />
-                    <h4 className="font-semibold text-gray-900">Objection Handlers</h4>
+              {/* Objection Handlers - handles both objection_handlers and objection_handling */}
+              {(() => {
+                const objections = company.sales_pitch.objection_handlers || company.sales_pitch.objection_handling;
+                return objections && objections.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-600" />
+                      <h4 className="font-semibold text-gray-900">Objection Handlers</h4>
+                    </div>
+                    <div className="space-y-3">
+                      {objections.map((handler: { objection: string; response?: string; likelihood?: string; response_using_savio_info?: string }, index: number) => (
+                        <div key={index} className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-start justify-between">
+                            <p className="text-sm font-medium text-gray-800 mb-1">
+                              &ldquo;{handler.objection}&rdquo;
+                            </p>
+                            {handler.likelihood && (
+                              <span className={cn(
+                                "text-xs px-2 py-0.5 rounded-full",
+                                handler.likelihood.toLowerCase() === 'high' ? "bg-red-100 text-red-700" :
+                                handler.likelihood.toLowerCase() === 'medium' ? "bg-amber-100 text-amber-700" :
+                                "bg-green-100 text-green-700"
+                              )}>
+                                {handler.likelihood}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600">
+                            <span className="font-medium text-green-700">Response: </span>
+                            {handler.response || handler.response_using_savio_info}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    {company.sales_pitch.objection_handlers.map((handler, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-3">
-                        <p className="text-sm font-medium text-gray-800 mb-1">
-                          &ldquo;{handler.objection}&rdquo;
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          <span className="font-medium text-green-700">Response: </span>
-                          {handler.response}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Discovery Questions */}
               {company.sales_pitch.discovery_questions && company.sales_pitch.discovery_questions.length > 0 && (
@@ -3356,21 +3693,44 @@ function CompanyIntelligenceTab({
                 </div>
               )}
 
-              {/* Next Steps */}
-              {company.sales_pitch.next_steps && company.sales_pitch.next_steps.length > 0 && (
+              {/* Next Steps - handles both array and object formats */}
+              {company.sales_pitch.next_steps && (
                 <div className="bg-white border rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Lightbulb className="w-5 h-5 text-blue-600" />
                     <h4 className="font-semibold text-gray-900">Suggested Next Steps</h4>
                   </div>
-                  <ul className="space-y-2">
-                    {company.sales_pitch.next_steps.map((step, index) => (
-                      <li key={index} className="flex items-start gap-2 text-sm">
-                        <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-700">{step}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {Array.isArray(company.sales_pitch.next_steps) ? (
+                    <ul className="space-y-2">
+                      {company.sales_pitch.next_steps.map((step: string, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-sm">
+                          <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                          <span className="text-gray-700">{step}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="space-y-3">
+                      {company.sales_pitch.next_steps.recommended_action && (
+                        <div className="bg-blue-50 p-3 rounded-lg">
+                          <p className="text-sm font-medium text-blue-800">Recommended Action</p>
+                          <p className="text-sm text-gray-700 mt-1">{company.sales_pitch.next_steps.recommended_action}</p>
+                        </div>
+                      )}
+                      {company.sales_pitch.next_steps.how_to_propose && (
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-sm font-medium text-gray-800">How to Propose</p>
+                          <p className="text-sm text-gray-600 mt-1">{company.sales_pitch.next_steps.how_to_propose}</p>
+                        </div>
+                      )}
+                      {company.sales_pitch.next_steps.urgency_angle && (
+                        <div className="bg-amber-50 p-3 rounded-lg">
+                          <p className="text-sm font-medium text-amber-800">Urgency Angle</p>
+                          <p className="text-sm text-gray-700 mt-1">{company.sales_pitch.next_steps.urgency_angle}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </>
