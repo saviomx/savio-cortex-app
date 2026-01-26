@@ -21,16 +21,20 @@ interface HeaderProps {
   className?: string;
 }
 
-const tabs = [
-  { id: 'inbox' as const, label: 'Inbox', icon: Mail, href: '/' },
-  { id: 'funnel' as const, label: 'Funnel', icon: BarChart3, href: '/funnel' },
-  { id: 'ai-agent' as const, label: 'AI Agent', icon: Bot, href: '/ai-agent' },
-  { id: 'ai-brain' as const, label: 'AI Brain', icon: Brain, href: '/ai-brain' },
-  { id: 'settings' as const, label: 'Settings', icon: Settings, href: '/settings' },
+const allTabs = [
+  { id: 'inbox' as const, label: 'Inbox', icon: Mail, href: '/', adminOnly: false },
+  { id: 'funnel' as const, label: 'Funnel', icon: BarChart3, href: '/funnel', adminOnly: false },
+  { id: 'ai-agent' as const, label: 'AI Agent', icon: Bot, href: '/ai-agent', adminOnly: false },
+  { id: 'ai-brain' as const, label: 'AI Brain', icon: Brain, href: '/ai-brain', adminOnly: true },
+  { id: 'settings' as const, label: 'Settings', icon: Settings, href: '/settings', adminOnly: true },
 ];
 
 export function Header({ activeTab = 'inbox', className }: HeaderProps) {
   const { user, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  // Filter tabs based on admin status
+  const tabs = allTabs.filter(tab => !tab.adminOnly || isAdmin);
 
   return (
     <>
@@ -92,7 +96,7 @@ export function Header({ activeTab = 'inbox', className }: HeaderProps) {
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-around h-14">
+        <div className="flex items-center justify-around pt-3 pb-8">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -101,7 +105,7 @@ export function Header({ activeTab = 'inbox', className }: HeaderProps) {
                 key={tab.id}
                 href={tab.href}
                 className={cn(
-                  'flex flex-col items-center justify-center flex-1 h-full transition-colors',
+                  'flex flex-col items-center justify-center flex-1 py-1 transition-colors',
                   isActive
                     ? 'text-blue-600 dark:text-blue-400'
                     : 'text-gray-500 dark:text-gray-400'

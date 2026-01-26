@@ -37,6 +37,14 @@ import {
   Trash2,
   Edit3,
   LayoutTemplate,
+  Target,
+  RefreshCw,
+  TrendingUp,
+  MessageCircle,
+  Lightbulb,
+  HelpCircle,
+  ArrowRight,
+  AlertCircle,
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
@@ -69,11 +77,14 @@ import type {
   ContactActivityResponse,
   TasksResponse,
   HubSpotTask,
+  CompanyIntelligenceCheckResponse,
+  CompanyIntelligenceStatus,
 } from '@/types/cortex';
 import { useDealStages } from '@/contexts/deal-stages-context';
 import { useCRMCacheStore } from '@/lib/stores/crm-cache-store';
+import { useAuth } from '@/contexts/auth-context';
 
-type TabType = 'chat' | 'qualification' | 'form' | 'meetings' | 'summary' | 'crm' | 'timeline' | 'tasks';
+type TabType = 'chat' | 'qualification' | 'form' | 'meetings' | 'summary' | 'crm' | 'timeline' | 'tasks' | 'company';
 
 interface CRMData {
   deal: HubSpotDeal | null;
@@ -132,7 +143,13 @@ export const ChatPanel = memo(function ChatPanel({
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [tasksData, setTasksData] = useState<TasksResponse | null>(null);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [companyIntelligence, setCompanyIntelligence] = useState<CompanyIntelligenceCheckResponse | null>(null);
+  const [loadingCompanyIntel, setLoadingCompanyIntel] = useState(false);
+  const [generatingCompanyIntel, setGeneratingCompanyIntel] = useState(false);
+  const companyIntelPollingRef = useRef<NodeJS.Timeout | null>(null);
   const { getStageLabel } = useDealStages();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   // CRM Cache Store for TTL-based caching
   const crmCache = useCRMCacheStore();
@@ -335,6 +352,113 @@ export const ChatPanel = memo(function ChatPanel({
     }
   }, [leadPhone, conversation?.client_data?.phone, loadingTasks, crmCache]);
 
+  // Check if company intelligence exists (GET)
+  const checkCompanyIntelligence = useCallback(async () => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!leadId || loadingCompanyIntel) return;
+
+    try {
+      setLoadingCompanyIntel(true);
+      const params = new URLSearchParams();
+      if (phone) params.set('phone', phone);
+
+      const response = await fetch(`/api/leads/${leadId}/company-intelligence?${params}`);
+      const data = await response.json();
+      setCompanyIntelligence(data);
+
+      // Start polling if status is processing
+      if (data.status === 'processing') {
+        startPolling();
+      }
+    } catch (error) {
+      console.error('Error checking company intelligence:', error);
+      setCompanyIntelligence({ exists: false, status: 'failed', error: 'Failed to check company intelligence' });
+    } finally {
+      setLoadingCompanyIntel(false);
+    }
+  }, [leadId, leadPhone, conversation?.client_data?.phone, loadingCompanyIntel]);
+
+  // Generate company intelligence (POST)
+  const generateCompanyIntelligence = useCallback(async (refresh = false) => {
+    const phone = leadPhone || conversation?.client_data?.phone;
+    if (!leadId || generatingCompanyIntel) return;
+
+    try {
+      setGeneratingCompanyIntel(true);
+      const response = await fetch(`/api/leads/${leadId}/company-intelligence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh, phone }),
+      });
+      const data = await response.json();
+
+      // Check if generation completed successfully with data
+      if (data.success && data.company) {
+        // Generation completed, show the data directly
+        setCompanyIntelligence({
+          exists: true,
+          status: 'completed',
+          company: data.company,
+          client_id: data.client_id,
+        });
+      } else {
+        // Generation failed or unexpected response
+        setCompanyIntelligence({
+          exists: false,
+          status: 'failed',
+          error: data.error || 'Failed to generate company intelligence',
+          error_code: data.error_code,
+        });
+      }
+    } catch (error) {
+      console.error('Error generating company intelligence:', error);
+      setCompanyIntelligence({ exists: false, status: 'failed', error: 'Failed to generate company intelligence' });
+    } finally {
+      setGeneratingCompanyIntel(false);
+    }
+  }, [leadId, leadPhone, conversation?.client_data?.phone, generatingCompanyIntel]);
+
+  // Polling function for processing status
+  const startPolling = useCallback(() => {
+    // Clear any existing polling
+    if (companyIntelPollingRef.current) {
+      clearInterval(companyIntelPollingRef.current);
+    }
+
+    const phone = leadPhone || conversation?.client_data?.phone;
+
+    companyIntelPollingRef.current = setInterval(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (phone) params.set('phone', phone);
+
+        const response = await fetch(`/api/leads/${leadId}/company-intelligence?${params}`);
+        const data = await response.json();
+        setCompanyIntelligence(data);
+
+        // Stop polling if no longer processing
+        if (data.status !== 'processing') {
+          if (companyIntelPollingRef.current) {
+            clearInterval(companyIntelPollingRef.current);
+            companyIntelPollingRef.current = null;
+          }
+        }
+      } catch (error) {
+        console.error('Error polling company intelligence:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+  }, [leadId, leadPhone, conversation?.client_data?.phone]);
+
+  // Cleanup polling on unmount or lead change
+  useEffect(() => {
+    return () => {
+      if (companyIntelPollingRef.current) {
+        clearInterval(companyIntelPollingRef.current);
+        companyIntelPollingRef.current = null;
+      }
+    };
+  }, [leadId]);
+
   const updateMeetingAttendance = async (meetingId: number, showed: number) => {
     if (!leadId || updatingAttendance !== null) return;
     try {
@@ -378,7 +502,7 @@ export const ChatPanel = memo(function ChatPanel({
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
-      // Reset states immediately
+      // Reset states immediately (but preserve activeTab for better UX)
       setConversation(null);
       setSummary(null);
       setCrmData(null);
@@ -387,7 +511,7 @@ export const ChatPanel = memo(function ChatPanel({
       setFullContact(null);
       setActivityData(null);
       setTasksData(null);
-      setActiveTab('chat');
+      setCompanyIntelligence(null);
       setMessageInput('');
 
       // Fetch data with abort signal
@@ -505,6 +629,7 @@ export const ChatPanel = memo(function ChatPanel({
     { id: 'timeline' as const, label: 'Timeline', icon: History },
     { id: 'tasks' as const, label: 'Tasks', icon: ListTodo, badge: tasksData?.total_count ? formatNumber(tasksData.total_count) : undefined },
     { id: 'form' as const, label: 'Form', icon: FileText },
+    { id: 'company' as const, label: 'Company', icon: Target },
     ...(showSummaryTab ? [{ id: 'summary' as const, label: 'Summary', icon: Sparkles }] : []),
   ];
 
@@ -648,21 +773,23 @@ export const ChatPanel = memo(function ChatPanel({
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {activeTab === 'chat' && (
           <>
-            {/* Debug Toggle */}
-            <div className="flex-shrink-0 flex items-center justify-end px-4 py-2 border-b border-gray-100">
-              <button
-                onClick={() => setDebugMode(!debugMode)}
-                className={cn(
-                  'flex items-center gap-1.5 px-2 py-1 text-xs rounded-md transition-colors',
-                  debugMode
-                    ? 'bg-purple-100 text-purple-700'
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                )}
-              >
-                <Bug className="w-3.5 h-3.5" />
-                Debug
-              </button>
-            </div>
+            {/* Debug Toggle - Admin only */}
+            {isAdmin && (
+              <div className="flex-shrink-0 flex items-center justify-end px-4 py-2 border-b border-gray-100">
+                <button
+                  onClick={() => setDebugMode(!debugMode)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-2 py-1 text-xs rounded-md transition-colors',
+                    debugMode
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  <Bug className="w-3.5 h-3.5" />
+                  Debug
+                </button>
+              </div>
+            )}
 
             {/* Messages */}
             <ScrollArea className="flex-1 min-h-0 p-4">
@@ -813,6 +940,16 @@ export const ChatPanel = memo(function ChatPanel({
             loading={loadingTasks}
             onFetch={fetchTasks}
             leadPhone={leadPhone || conversation?.client_data?.phone || null}
+          />
+        )}
+
+        {activeTab === 'company' && (
+          <CompanyIntelligenceTab
+            data={companyIntelligence}
+            loading={loadingCompanyIntel}
+            generating={generatingCompanyIntel}
+            onCheck={checkCompanyIntelligence}
+            onGenerate={generateCompanyIntelligence}
           />
         )}
       </div>
@@ -2900,6 +3037,341 @@ function TasksTab({
         )}
       </div>
     </ScrollArea>
+  );
+}
+
+// Company Intelligence Tab Component
+function CompanyIntelligenceTab({
+  data,
+  loading,
+  generating,
+  onCheck,
+  onGenerate,
+}: {
+  data: CompanyIntelligenceCheckResponse | null;
+  loading: boolean;
+  generating: boolean;
+  onCheck: () => void;
+  onGenerate: (refresh?: boolean) => void;
+}) {
+  // Auto-fetch on mount if no data
+  useEffect(() => {
+    if (!data && !loading) {
+      onCheck();
+    }
+  }, [data, loading, onCheck]);
+
+  // Loading state - initial check
+  if (loading && !data) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-blue-500" />
+          <p className="text-gray-500">Checking for company intelligence...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Status: not_found - Show generate button
+  if (data?.status === 'not_found') {
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Target className="w-12 h-12 text-gray-300 mb-4" />
+          <h4 className="font-medium text-gray-900 mb-2">Company Intelligence</h4>
+          <p className="text-sm text-gray-500 mb-4 max-w-sm">
+            Generate AI-powered insights about this company including fit score, talking points, and objection handlers.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 max-w-sm">
+            <p className="text-xs text-amber-700">
+              <strong>Note:</strong> Requires a business email address. Personal emails (Gmail, Yahoo, etc.) are not supported.
+            </p>
+          </div>
+          <Button onClick={() => onGenerate(false)} disabled={generating}>
+            {generating ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4 mr-2" />
+            )}
+            {generating ? 'Generating...' : 'Generate Intelligence'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Status: processing - Show spinner with message
+  if (data?.status === 'processing') {
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Loader2 className="w-12 h-12 text-blue-500 mb-4 animate-spin" />
+          <h4 className="font-medium text-gray-900 mb-2">Generating Intelligence</h4>
+          <p className="text-sm text-gray-500 max-w-sm">
+            {data.message || 'Analyzing company website and generating insights. This may take a minute...'}
+          </p>
+          <div className="mt-4 space-y-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-44" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Status: failed - Show error with retry
+  if (data?.status === 'failed') {
+    const errorMessage = data.error_code === 'NO_EMAIL' ? 'No email address found for this contact.' :
+      data.error_code === 'PERSONAL_EMAIL' ? 'Contact has a personal email (Gmail, Yahoo, etc). A business email is required.' :
+      data.error_code === 'CLIENT_NOT_FOUND' ? 'Contact not found in the system.' :
+      data.error_code === 'SCRAPE_FAILED' ? 'Failed to analyze the company website.' :
+      data.error_code === 'ANALYSIS_FAILED' ? 'Failed to generate company analysis.' :
+      data.error_code === 'PITCH_FAILED' ? 'Failed to generate sales pitch.' :
+      (typeof data.error === 'string' ? data.error : 'An unexpected error occurred.');
+
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-medium text-red-800">Unable to generate intelligence</h4>
+              <p className="text-sm text-red-600 mt-1">{errorMessage}</p>
+              {data.error_code !== 'NO_EMAIL' && data.error_code !== 'PERSONAL_EMAIL' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => onGenerate(true)}
+                  disabled={generating}
+                >
+                  {generating ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-1" />
+                  )}
+                  Retry
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Status: completed - Show company data
+  if (data?.status === 'completed' && data.company) {
+    const company = data.company;
+
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        {/* Header with refresh button */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">Company Intelligence</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onGenerate(true)}
+            disabled={generating}
+          >
+            <RefreshCw className={cn("w-4 h-4 mr-1", generating && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+
+        <div className="space-y-6">
+          {/* Company Overview */}
+          {company.overview && (
+            <div className="bg-white border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Building className="w-5 h-5 text-blue-600" />
+                <h4 className="font-semibold text-gray-900">
+                  {company.name || 'Company Overview'}
+                </h4>
+              </div>
+              {company.website && (
+                <a
+                  href={company.website.startsWith('http') ? company.website : `https://${company.website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-3"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  {company.domain || company.website}
+                </a>
+              )}
+              <div className="space-y-3 text-sm">
+                {company.overview.what_they_do && (
+                  <div>
+                    <span className="font-medium text-gray-700">What they do: </span>
+                    <span className="text-gray-600">{company.overview.what_they_do}</span>
+                  </div>
+                )}
+                {company.overview.who_they_help && (
+                  <div>
+                    <span className="font-medium text-gray-700">Who they help: </span>
+                    <span className="text-gray-600">{company.overview.who_they_help}</span>
+                  </div>
+                )}
+                {company.overview.key_products && company.overview.key_products.length > 0 && (
+                  <div>
+                    <span className="font-medium text-gray-700">Key products/services: </span>
+                    <span className="text-gray-600">{company.overview.key_products.join(', ')}</span>
+                  </div>
+                )}
+                {company.overview.differentiators && company.overview.differentiators.length > 0 && (
+                  <div>
+                    <span className="font-medium text-gray-700">Differentiators: </span>
+                    <span className="text-gray-600">{company.overview.differentiators.join(', ')}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sales Pitch */}
+          {company.sales_pitch && (
+            <>
+              {/* Fit Score */}
+              {company.sales_pitch.fit_score !== undefined && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-blue-600" />
+                      <span className="font-semibold text-gray-900">Fit Score</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full",
+                            company.sales_pitch.fit_score >= 80 ? "bg-green-500" :
+                            company.sales_pitch.fit_score >= 60 ? "bg-blue-500" :
+                            company.sales_pitch.fit_score >= 40 ? "bg-amber-500" : "bg-red-500"
+                          )}
+                          style={{ width: `${company.sales_pitch.fit_score}%` }}
+                        />
+                      </div>
+                      <span className={cn(
+                        "font-bold text-lg",
+                        company.sales_pitch.fit_score >= 80 ? "text-green-600" :
+                        company.sales_pitch.fit_score >= 60 ? "text-blue-600" :
+                        company.sales_pitch.fit_score >= 40 ? "text-amber-600" : "text-red-600"
+                      )}>
+                        {company.sales_pitch.fit_score}%
+                      </span>
+                    </div>
+                  </div>
+                  {(company.sales_pitch.fit_reasoning || company.sales_pitch.fit_analysis) && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      {company.sales_pitch.fit_reasoning || company.sales_pitch.fit_analysis}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Talking Points */}
+              {(() => {
+                const talkingPoints = company.sales_pitch.talking_points || company.sales_pitch.key_talking_points;
+                return talkingPoints && talkingPoints.length > 0 && (
+                  <div className="bg-white border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MessageCircle className="w-5 h-5 text-green-600" />
+                      <h4 className="font-semibold text-gray-900">Talking Points</h4>
+                    </div>
+                    <ul className="space-y-2">
+                      {talkingPoints.map((point: string, index: number) => (
+                        <li key={index} className="flex items-start gap-2 text-sm">
+                          <ArrowRight className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                          <span className="text-gray-700">{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+              {/* Objection Handlers */}
+              {company.sales_pitch.objection_handlers && company.sales_pitch.objection_handlers.length > 0 && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                    <h4 className="font-semibold text-gray-900">Objection Handlers</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {company.sales_pitch.objection_handlers.map((handler, index) => (
+                      <div key={index} className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-sm font-medium text-gray-800 mb-1">
+                          &ldquo;{handler.objection}&rdquo;
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          <span className="font-medium text-green-700">Response: </span>
+                          {handler.response}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Discovery Questions */}
+              {company.sales_pitch.discovery_questions && company.sales_pitch.discovery_questions.length > 0 && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <HelpCircle className="w-5 h-5 text-purple-600" />
+                    <h4 className="font-semibold text-gray-900">Discovery Questions</h4>
+                  </div>
+                  <ul className="space-y-2">
+                    {company.sales_pitch.discovery_questions.map((question, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm">
+                        <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0 text-xs font-medium">
+                          {index + 1}
+                        </span>
+                        <span className="text-gray-700">{question}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Next Steps */}
+              {company.sales_pitch.next_steps && company.sales_pitch.next_steps.length > 0 && (
+                <div className="bg-white border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Lightbulb className="w-5 h-5 text-blue-600" />
+                    <h4 className="font-semibold text-gray-900">Suggested Next Steps</h4>
+                  </div>
+                  <ul className="space-y-2">
+                    {company.sales_pitch.next_steps.map((step, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm">
+                        <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                        <span className="text-gray-700">{step}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback - shouldn't happen
+  return (
+    <div className="flex-1 flex items-center justify-center p-4">
+      <div className="text-center text-gray-500">
+        <p>Unable to load company intelligence.</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={onCheck}>
+          <RefreshCw className="w-4 h-4 mr-1" />
+          Try Again
+        </Button>
+      </div>
+    </div>
   );
 }
 

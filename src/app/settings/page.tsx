@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Building2,
   Phone,
@@ -31,6 +32,11 @@ import {
   AlertCircle,
   Sparkles,
   LogOut,
+  Crown,
+  Briefcase,
+  UserCog,
+  Eye,
+  PlayCircle,
 } from 'lucide-react';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
@@ -159,14 +165,56 @@ interface User {
 }
 
 type SectionType = 'profile' | 'phone-numbers' | 'templates' | 'users';
+type UserFilterTab = 'all' | 'active' | 'inactive' | 'admin' | 'manager' | 'sdr';
 
 const ROLES = ['admin', 'sdr', 'manager'];
 
-export default function SettingsPage() {
+const VALID_SECTIONS: SectionType[] = ['profile', 'phone-numbers', 'templates', 'users'];
+
+// Loading skeleton for Suspense fallback
+function SettingsLoadingSkeleton() {
+  return (
+    <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
+      <Header activeTab="settings" />
+      <div className="flex flex-1 overflow-hidden pb-14 md:pb-0">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-pulse flex flex-col items-center gap-4">
+            <div className="h-8 w-8 bg-gray-200 rounded-full" />
+            <div className="h-4 w-32 bg-gray-200 rounded" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main settings content (uses useSearchParams)
+function SettingsPageContent() {
   const { user, logout } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [activeSection, setActiveSection] = useState<SectionType>('profile');
+  // Get section from URL or default to 'profile'
+  const sectionFromUrl = searchParams.get('section') as SectionType | null;
+  const initialSection = sectionFromUrl && VALID_SECTIONS.includes(sectionFromUrl) ? sectionFromUrl : 'profile';
+
+  const [activeSection, setActiveSection] = useState<SectionType>(initialSection);
+  const [userFilterTab, setUserFilterTab] = useState<UserFilterTab>('all');
+
+  // Update URL when section changes
+  const handleSectionChange = useCallback((section: SectionType) => {
+    setActiveSection(section);
+    router.push(`/settings?section=${section}`, { scroll: false });
+  }, [router]);
+
+  // Sync with URL on mount and when URL changes
+  useEffect(() => {
+    const section = searchParams.get('section') as SectionType | null;
+    if (section && VALID_SECTIONS.includes(section)) {
+      setActiveSection(section);
+    }
+  }, [searchParams]);
 
   // Business Profile state
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
@@ -214,6 +262,25 @@ export default function SettingsPage() {
   const [updatingUser, setUpdatingUser] = useState<number | null>(null);
   const [roleChangeUser, setRoleChangeUser] = useState<User | null>(null);
   const [newRole, setNewRole] = useState('');
+
+  // Filtered users based on selected tab
+  const filteredUsers = useMemo(() => {
+    if (userFilterTab === 'all') return users;
+    if (userFilterTab === 'active') return users.filter(u => u.is_active);
+    if (userFilterTab === 'inactive') return users.filter(u => !u.is_active);
+    // Filter by role
+    return users.filter(u => u.role === userFilterTab);
+  }, [users, userFilterTab]);
+
+  // User counts by category
+  const userCounts = useMemo(() => ({
+    all: users.length,
+    active: users.filter(u => u.is_active).length,
+    inactive: users.filter(u => !u.is_active).length,
+    admin: users.filter(u => u.role === 'admin').length,
+    manager: users.filter(u => u.role === 'manager').length,
+    sdr: users.filter(u => u.role === 'sdr').length,
+  }), [users]);
 
   // Fetch business profile
   const fetchProfile = useCallback(async () => {
@@ -541,13 +608,17 @@ export default function SettingsPage() {
   const handleToggleUserActive = async (userId: number, currentActive: boolean) => {
     try {
       setUpdatingUser(userId);
+      const action = currentActive ? 'deactivate' : 'activate';
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !currentActive }),
+        body: JSON.stringify({ action }),
       });
       if (response.ok) {
         await fetchUsers();
+      } else {
+        const error = await response.json();
+        console.error('Error updating user:', error);
       }
     } catch (error) {
       console.error('Error updating user:', error);
@@ -564,12 +635,15 @@ export default function SettingsPage() {
       const response = await fetch(`/api/admin/users/${roleChangeUser.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
+        body: JSON.stringify({ action: 'role', role: newRole }),
       });
       if (response.ok) {
         setRoleChangeUser(null);
         setNewRole('');
         await fetchUsers();
+      } else {
+        const error = await response.json();
+        console.error('Error changing role:', error);
       }
     } catch (error) {
       console.error('Error changing role:', error);
@@ -625,7 +699,7 @@ export default function SettingsPage() {
         <div className="md:hidden border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           <div className="flex overflow-x-auto px-2 py-2 gap-2 no-scrollbar">
             <button
-              onClick={() => setActiveSection('profile')}
+              onClick={() => handleSectionChange('profile')}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
                 activeSection === 'profile'
@@ -637,7 +711,7 @@ export default function SettingsPage() {
               Profile
             </button>
             <button
-              onClick={() => setActiveSection('phone-numbers')}
+              onClick={() => handleSectionChange('phone-numbers')}
               className={cn(
                 'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
                 activeSection === 'phone-numbers'
@@ -651,7 +725,7 @@ export default function SettingsPage() {
             {isAdmin && (
               <>
                 <button
-                  onClick={() => setActiveSection('templates')}
+                  onClick={() => handleSectionChange('templates')}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
                     activeSection === 'templates'
@@ -663,7 +737,7 @@ export default function SettingsPage() {
                   Templates
                 </button>
                 <button
-                  onClick={() => setActiveSection('users')}
+                  onClick={() => handleSectionChange('users')}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
                     activeSection === 'users'
@@ -684,7 +758,7 @@ export default function SettingsPage() {
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Settings</h2>
           <nav className="space-y-1 flex-1">
             <button
-              onClick={() => setActiveSection('profile')}
+              onClick={() => handleSectionChange('profile')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                 activeSection === 'profile'
@@ -696,7 +770,7 @@ export default function SettingsPage() {
               Business Profile
             </button>
             <button
-              onClick={() => setActiveSection('phone-numbers')}
+              onClick={() => handleSectionChange('phone-numbers')}
               className={cn(
                 'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                 activeSection === 'phone-numbers'
@@ -715,7 +789,7 @@ export default function SettingsPage() {
                   Administration
                 </p>
                 <button
-                  onClick={() => setActiveSection('templates')}
+                  onClick={() => handleSectionChange('templates')}
                   className={cn(
                     'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     activeSection === 'templates'
@@ -727,7 +801,7 @@ export default function SettingsPage() {
                   WhatsApp Templates
                 </button>
                 <button
-                  onClick={() => setActiveSection('users')}
+                  onClick={() => handleSectionChange('users')}
                   className={cn(
                     'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     activeSection === 'users'
@@ -1208,36 +1282,100 @@ export default function SettingsPage() {
                             </div>
 
                             {expandedTemplate === template.id && (
-                              <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                                {template.header_text && (
-                                  <div>
-                                    <p className="text-xs text-gray-500 font-medium">Header</p>
-                                    <p className="text-sm">{template.header_text}</p>
+                              <div className="mt-4 pt-4 border-t border-gray-100">
+                                {/* WhatsApp-style Preview */}
+                                <div className="bg-[#efeae2] rounded-lg p-4 mb-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <Eye className="w-4 h-4 text-[#667781]" />
+                                    <span className="text-xs font-medium text-[#667781]">Message Preview</span>
                                   </div>
-                                )}
-                                <div>
-                                  <p className="text-xs text-gray-500 font-medium">Body</p>
-                                  <p className="text-sm whitespace-pre-wrap">{template.body_text}</p>
+                                  {/* WhatsApp message bubble */}
+                                  <div className="bg-[#d9fdd3] rounded-lg shadow-sm max-w-[340px] overflow-hidden">
+                                    {/* Media Header */}
+                                    {template.header_type && ['VIDEO', 'IMAGE', 'DOCUMENT'].includes(template.header_type) && (
+                                      <div className="relative bg-[#c8e6c3]">
+                                        {template.header_type === 'VIDEO' && (
+                                          <div className="w-full h-36 flex items-center justify-center">
+                                            <div className="text-center text-[#667781]">
+                                              <PlayCircle className="w-12 h-12 mx-auto" />
+                                              <span className="text-xs mt-1 block">Video</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {template.header_type === 'IMAGE' && (
+                                          <div className="w-full h-36 flex items-center justify-center">
+                                            <div className="text-center text-[#667781]">
+                                              <ImageIcon className="w-12 h-12 mx-auto" />
+                                              <span className="text-xs mt-1 block">Image</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                        {template.header_type === 'DOCUMENT' && (
+                                          <div className="w-full h-24 flex items-center justify-center">
+                                            <div className="text-center text-[#667781]">
+                                              <File className="w-10 h-10 mx-auto" />
+                                              <span className="text-xs mt-1 block">Document</span>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    {/* Text Header */}
+                                    {template.header_text && (
+                                      <p className="text-sm font-semibold text-[#111b21] px-3 pt-2">
+                                        {template.header_text}
+                                      </p>
+                                    )}
+                                    {/* Body */}
+                                    <p className="text-sm text-[#111b21] whitespace-pre-wrap px-3 py-2">
+                                      {template.body_text}
+                                    </p>
+                                    {/* Footer */}
+                                    {template.footer_text && (
+                                      <p className="text-xs text-[#667781] px-3 pb-2">
+                                        {template.footer_text}
+                                      </p>
+                                    )}
+                                    {/* Buttons */}
+                                    {template.buttons_json?.buttons && template.buttons_json.buttons.length > 0 && (
+                                      <div className="border-t border-[#c8e6c3] divide-y divide-[#c8e6c3]">
+                                        {template.buttons_json.buttons.map((btn, idx) => (
+                                          <div key={idx} className="px-3 py-2 text-center text-sm text-[#00a884] font-medium">
+                                            {btn.type === 'URL' && '🔗 '}
+                                            {btn.type === 'PHONE_NUMBER' && '📞 '}
+                                            {btn.type === 'QUICK_REPLY' && '💬 '}
+                                            {btn.type === 'COPY_CODE' && '📋 '}
+                                            {btn.text}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                {template.footer_text && (
-                                  <div>
-                                    <p className="text-xs text-gray-500 font-medium">Footer</p>
-                                    <p className="text-sm">{template.footer_text}</p>
-                                  </div>
-                                )}
-                                {template.rejection_reason && (
-                                  <div className="p-3 bg-red-50 rounded-md">
-                                    <p className="text-xs text-red-600 font-medium">Rejection Reason</p>
-                                    <p className="text-sm text-red-700">{template.rejection_reason}</p>
-                                  </div>
-                                )}
-                                <div className="flex items-center gap-4 text-xs text-gray-400">
-                                  {template.meta_template_id && (
-                                    <span>Meta ID: {template.meta_template_id}</span>
+
+                                {/* Template Details */}
+                                <div className="space-y-3">
+                                  {template.rejection_reason && (
+                                    <div className="p-3 bg-red-50 rounded-md">
+                                      <p className="text-xs text-red-600 font-medium">Rejection Reason</p>
+                                      <p className="text-sm text-red-700">{template.rejection_reason}</p>
+                                    </div>
                                   )}
-                                  <span>
-                                    Created: {new Date(template.created_at).toLocaleDateString()}
-                                  </span>
+                                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
+                                    {template.header_type && (
+                                      <span className="flex items-center gap-1">
+                                        <span className="font-medium text-gray-500">Header:</span> {template.header_type}
+                                      </span>
+                                    )}
+                                    {template.meta_template_id && (
+                                      <span className="flex items-center gap-1">
+                                        <span className="font-medium text-gray-500">Meta ID:</span> {template.meta_template_id}
+                                      </span>
+                                    )}
+                                    <span className="flex items-center gap-1">
+                                      <span className="font-medium text-gray-500">Created:</span> {new Date(template.created_at).toLocaleDateString()}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -1270,6 +1408,93 @@ export default function SettingsPage() {
                     </Button>
                   </div>
 
+                  {/* User Filter Tabs */}
+                  <div className="border-b border-gray-200">
+                    <div className="flex gap-1 overflow-x-auto pb-px no-scrollbar">
+                      {/* Status Tabs */}
+                      <button
+                        onClick={() => setUserFilterTab('all')}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                          userFilterTab === 'all'
+                            ? 'border-gray-900 text-gray-900'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                      >
+                        <Users className="w-4 h-4" />
+                        All
+                        <Badge variant="secondary" className="ml-1 text-xs">{userCounts.all}</Badge>
+                      </button>
+                      <button
+                        onClick={() => setUserFilterTab('active')}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                          userFilterTab === 'active'
+                            ? 'border-green-600 text-green-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                      >
+                        <UserCheck className="w-4 h-4" />
+                        Active
+                        <Badge className="ml-1 text-xs bg-green-100 text-green-700">{userCounts.active}</Badge>
+                      </button>
+                      <button
+                        onClick={() => setUserFilterTab('inactive')}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                          userFilterTab === 'inactive'
+                            ? 'border-red-600 text-red-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                      >
+                        <UserX className="w-4 h-4" />
+                        Inactive
+                        <Badge className="ml-1 text-xs bg-red-100 text-red-700">{userCounts.inactive}</Badge>
+                      </button>
+                      <div className="w-px bg-gray-200 mx-2 self-stretch" />
+                      {/* Role Tabs */}
+                      <button
+                        onClick={() => setUserFilterTab('admin')}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                          userFilterTab === 'admin'
+                            ? 'border-purple-600 text-purple-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                      >
+                        <Crown className="w-4 h-4" />
+                        Admin
+                        <Badge className="ml-1 text-xs bg-purple-100 text-purple-700">{userCounts.admin}</Badge>
+                      </button>
+                      <button
+                        onClick={() => setUserFilterTab('manager')}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                          userFilterTab === 'manager'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                      >
+                        <Briefcase className="w-4 h-4" />
+                        Manager
+                        <Badge className="ml-1 text-xs bg-blue-100 text-blue-700">{userCounts.manager}</Badge>
+                      </button>
+                      <button
+                        onClick={() => setUserFilterTab('sdr')}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
+                          userFilterTab === 'sdr'
+                            ? 'border-gray-600 text-gray-900'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        )}
+                      >
+                        <UserCog className="w-4 h-4" />
+                        SDR
+                        <Badge variant="secondary" className="ml-1 text-xs">{userCounts.sdr}</Badge>
+                      </button>
+                    </div>
+                  </div>
+
                   {loadingUsers ? (
                     <div className="space-y-4">
                       {[1, 2, 3].map((i) => (
@@ -1286,16 +1511,20 @@ export default function SettingsPage() {
                         </Card>
                       ))}
                     </div>
-                  ) : users.length === 0 ? (
+                  ) : filteredUsers.length === 0 ? (
                     <Card>
                       <CardContent className="flex flex-col items-center justify-center py-12">
                         <Users className="w-12 h-12 text-gray-300 mb-4" />
-                        <p className="text-gray-500">No users found</p>
+                        <p className="text-gray-500">
+                          {users.length === 0
+                            ? 'No users found'
+                            : `No ${userFilterTab === 'all' ? '' : userFilterTab + ' '}users`}
+                        </p>
                       </CardContent>
                     </Card>
                   ) : (
                     <div className="space-y-4">
-                      {users.map((u) => (
+                      {filteredUsers.map((u) => (
                         <Card key={u.id}>
                           <CardContent className="py-4">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1862,5 +2091,14 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Default export with Suspense wrapper for useSearchParams
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsLoadingSkeleton />}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }

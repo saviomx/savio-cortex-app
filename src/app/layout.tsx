@@ -9,8 +9,17 @@ export const metadata: Metadata = {
   description: "AI-powered CRM and WhatsApp communication platform for lead management and automation",
   manifest: "/manifest.json",
   icons: {
-    icon: "/savio-logo-DdP6MEtP.png",
-    apple: "/savio-logo-DdP6MEtP.png",
+    icon: "/icon-192x192.png",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Cortex",
+  },
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+    "mobile-web-app-capable": "yes",
   },
 };
 
