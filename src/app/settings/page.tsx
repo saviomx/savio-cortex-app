@@ -22,6 +22,8 @@ import {
   UserX,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Upload,
   Image as ImageIcon,
@@ -37,6 +39,8 @@ import {
   UserCog,
   Eye,
   PlayCircle,
+  Search,
+  Clock,
 } from 'lucide-react';
 import { Header } from '@/components/header';
 import { Button } from '@/components/ui/button';
@@ -165,7 +169,8 @@ interface User {
 }
 
 type SectionType = 'profile' | 'phone-numbers' | 'templates' | 'users';
-type UserFilterTab = 'all' | 'active' | 'inactive' | 'admin' | 'manager' | 'sdr';
+type UserFilterTab = 'all' | 'active' | 'inactive';
+type UserRoleFilter = 'all' | 'admin' | 'manager' | 'sdr';
 
 const ROLES = ['admin', 'sdr', 'manager'];
 
@@ -201,6 +206,8 @@ function SettingsPageContent() {
 
   const [activeSection, setActiveSection] = useState<SectionType>(initialSection);
   const [userFilterTab, setUserFilterTab] = useState<UserFilterTab>('all');
+  const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('all');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
 
   // Update URL when section changes
   const handleSectionChange = useCallback((section: SectionType) => {
@@ -234,7 +241,7 @@ function SettingsPageContent() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [syncingTemplates, setSyncingTemplates] = useState(false);
-  const [templateStatusTab, setTemplateStatusTab] = useState<'APPROVED' | 'PENDING' | 'LOCAL_ONLY' | 'DELETED'>('APPROVED');
+  const [templateStatusTab, setTemplateStatusTab] = useState<'ALL' | 'APPROVED' | 'PENDING' | 'LOCAL_ONLY' | 'DELETED'>('APPROVED');
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null);
@@ -256,6 +263,23 @@ function SettingsPageContent() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [mediaFileName, setMediaFileName] = useState<string>('');
 
+  // New template filtering & pagination state
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState<string>('all');
+  const [templateLanguageFilter, setTemplateLanguageFilter] = useState<string>('all');
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [currentTemplatePage, setCurrentTemplatePage] = useState(1);
+  const TEMPLATES_PER_PAGE = 10;
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(templateSearchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [templateSearchQuery]);
+
   // Users state (admin only)
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -263,14 +287,25 @@ function SettingsPageContent() {
   const [roleChangeUser, setRoleChangeUser] = useState<User | null>(null);
   const [newRole, setNewRole] = useState('');
 
-  // Filtered users based on selected tab
+  // Filtered users based on search, status, and role
   const filteredUsers = useMemo(() => {
-    if (userFilterTab === 'all') return users;
-    if (userFilterTab === 'active') return users.filter(u => u.is_active);
-    if (userFilterTab === 'inactive') return users.filter(u => !u.is_active);
-    // Filter by role
-    return users.filter(u => u.role === userFilterTab);
-  }, [users, userFilterTab]);
+    return users.filter(u => {
+      // Search filter
+      const matchesSearch = !userSearchQuery ||
+        u.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        u.role.toLowerCase().includes(userSearchQuery.toLowerCase());
+
+      // Status filter
+      const matchesStatus = userFilterTab === 'all' ||
+        (userFilterTab === 'active' && u.is_active) ||
+        (userFilterTab === 'inactive' && !u.is_active);
+
+      // Role filter
+      const matchesRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+
+      return matchesSearch && matchesStatus && matchesRole;
+    });
+  }, [users, userSearchQuery, userFilterTab, userRoleFilter]);
 
   // User counts by category
   const userCounts = useMemo(() => ({
@@ -350,25 +385,40 @@ function SettingsPageContent() {
     }
   }, []);
 
-  // Fetch templates (admin only)
-  const fetchTemplates = useCallback(async (status?: string) => {
+  // Fetch templates (admin only) - fetches all statuses for client-side filtering
+  const fetchTemplates = useCallback(async () => {
     if (!isAdmin) return;
     try {
       setLoadingTemplates(true);
-      const statusFilter = status || templateStatusTab;
-      const response = await fetch(`/api/admin/templates?status=${statusFilter}`);
-      if (response.ok) {
-        const result = await response.json();
-        // Backend returns { items: [...], total_count, has_more }
-        const data = result.items || result.data || result;
-        setTemplates(Array.isArray(data) ? data : []);
+      // Fetch all statuses in parallel and combine
+      const statuses = ['APPROVED', 'PENDING', 'LOCAL_ONLY', 'DELETED', 'REJECTED'];
+      const responses = await Promise.all(
+        statuses.map(status => fetch(`/api/admin/templates?status=${status}`))
+      );
+
+      const allTemplates: Template[] = [];
+      for (const response of responses) {
+        if (response.ok) {
+          const result = await response.json();
+          const data = result.items || result.data || result;
+          if (Array.isArray(data)) {
+            allTemplates.push(...data);
+          }
+        }
       }
+
+      // Deduplicate by id just in case
+      const uniqueTemplates = allTemplates.filter(
+        (t, index, self) => index === self.findIndex(x => x.id === t.id)
+      );
+
+      setTemplates(uniqueTemplates);
     } catch (error) {
       console.error('Error fetching templates:', error);
     } finally {
       setLoadingTemplates(false);
     }
-  }, [isAdmin, templateStatusTab]);
+  }, [isAdmin]);
 
   // Fetch users (admin only)
   const fetchUsers = useCallback(async () => {
@@ -403,12 +453,60 @@ function SettingsPageContent() {
     }
   }, [isAdmin, fetchTemplates, fetchUsers]);
 
-  // Refetch templates when status tab changes
+  // Client-side template filtering with debounced search
+  const filteredTemplates = useMemo(() => {
+    const searchLower = debouncedSearchQuery.toLowerCase();
+    return templates.filter(t => {
+      // Status filter
+      const matchesStatus = templateStatusTab === 'ALL' ||
+        (templateStatusTab === 'APPROVED' && t.status === 'APPROVED') ||
+        (templateStatusTab === 'PENDING' && t.status === 'PENDING') ||
+        (templateStatusTab === 'LOCAL_ONLY' && t.status === 'LOCAL_ONLY') ||
+        (templateStatusTab === 'DELETED' && t.status === 'DELETED');
+
+      // Search filter - searches name, body_text, and meta_template_id
+      const matchesSearch = !debouncedSearchQuery ||
+        t.name.toLowerCase().includes(searchLower) ||
+        t.body_text?.toLowerCase().includes(searchLower) ||
+        t.meta_template_id?.toLowerCase().includes(searchLower);
+
+      // Category filter
+      const matchesCategory = templateCategoryFilter === 'all' || t.category === templateCategoryFilter;
+
+      // Language filter
+      const matchesLanguage = templateLanguageFilter === 'all' || t.language === templateLanguageFilter;
+
+      return matchesStatus && matchesSearch && matchesCategory && matchesLanguage;
+    });
+  }, [templates, templateStatusTab, debouncedSearchQuery, templateCategoryFilter, templateLanguageFilter]);
+
+  // Paginated templates
+  const paginatedTemplates = useMemo(() => {
+    const start = (currentTemplatePage - 1) * TEMPLATES_PER_PAGE;
+    return filteredTemplates.slice(start, start + TEMPLATES_PER_PAGE);
+  }, [filteredTemplates, currentTemplatePage, TEMPLATES_PER_PAGE]);
+
+  const totalTemplatePages = Math.ceil(filteredTemplates.length / TEMPLATES_PER_PAGE);
+
+  // Available languages from templates (for dropdown)
+  const availableLanguages = useMemo(() => {
+    const langs = new Set(templates.map(t => t.language));
+    return Array.from(langs).sort();
+  }, [templates]);
+
+  // Template counts by status
+  const templateCounts = useMemo(() => ({
+    ALL: templates.length,
+    APPROVED: templates.filter(t => t.status === 'APPROVED').length,
+    PENDING: templates.filter(t => t.status === 'PENDING').length,
+    LOCAL_ONLY: templates.filter(t => t.status === 'LOCAL_ONLY').length,
+    DELETED: templates.filter(t => t.status === 'DELETED').length,
+  }), [templates]);
+
+  // Reset pagination when filters change
   useEffect(() => {
-    if (isAdmin) {
-      fetchTemplates(templateStatusTab);
-    }
-  }, [isAdmin, templateStatusTab, fetchTemplates]);
+    setCurrentTemplatePage(1);
+  }, [templateStatusTab, debouncedSearchQuery, templateCategoryFilter, templateLanguageFilter]);
 
   // Save business profile
   const handleSaveProfile = async () => {
@@ -820,7 +918,7 @@ function SettingsPageContent() {
         {/* Main Content */}
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
-            <div className="p-6 max-w-4xl">
+            <div className={cn("p-4 sm:p-6", activeSection === 'templates' ? 'max-w-6xl' : 'max-w-4xl')}>
               {/* Business Profile Section */}
               {activeSection === 'profile' && (
                 <div className="space-y-6">
@@ -1130,14 +1228,15 @@ function SettingsPageContent() {
                 </div>
               )}
 
-              {/* WhatsApp Templates Section (Admin only) */}
+              {/* WhatsApp Templates Section (Admin only) - Redesigned */}
               {activeSection === 'templates' && isAdmin && (
-                <div className="space-y-6">
+                <div className="space-y-4">
+                  {/* Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <h1 className="text-xl sm:text-2xl font-bold text-gray-900">WhatsApp Templates</h1>
                       <p className="text-gray-500 text-sm mt-1">
-                        Manage WhatsApp message templates
+                        Manage your message templates
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -1146,80 +1245,118 @@ function SettingsPageContent() {
                         size="sm"
                         onClick={handleSyncTemplates}
                         disabled={syncingTemplates}
-                        className="flex-1 sm:flex-none"
                       >
-                        <RefreshCw className={cn('w-4 h-4 sm:mr-2', syncingTemplates && 'animate-spin')} />
-                        <span className="hidden sm:inline">Sync from Meta</span>
-                        <span className="sm:hidden">Sync</span>
+                        <RefreshCw className={cn('w-4 h-4 mr-2', syncingTemplates && 'animate-spin')} />
+                        Sync
                       </Button>
-                      <Button size="sm" onClick={() => setShowCreateTemplate(true)} className="flex-1 sm:flex-none">
-                        <Plus className="w-4 h-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Create Template</span>
-                        <span className="sm:hidden">Create</span>
+                      <Button size="sm" onClick={() => setShowCreateTemplate(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        New
                       </Button>
                     </div>
                   </div>
 
-                  {/* Status Tabs */}
-                  <div className="flex border-b border-gray-200 overflow-x-auto no-scrollbar">
+                  {/* Search & Filter Bar */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by name, message, or Meta ID..."
+                        value={templateSearchQuery}
+                        onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                        className="pl-9 h-10"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Select value={templateCategoryFilter} onValueChange={setTemplateCategoryFilter}>
+                        <SelectTrigger className="flex-1 sm:flex-none sm:w-[150px] h-10">
+                          <SelectValue placeholder="Category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Categories</SelectItem>
+                          <SelectItem value="MARKETING">Marketing</SelectItem>
+                          <SelectItem value="UTILITY">Utility</SelectItem>
+                          <SelectItem value="AUTHENTICATION">Authentication</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={templateLanguageFilter} onValueChange={setTemplateLanguageFilter}>
+                        <SelectTrigger className="flex-1 sm:flex-none sm:w-[150px] h-10">
+                          <SelectValue placeholder="Language" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Languages</SelectItem>
+                          {availableLanguages.map(lang => (
+                            <SelectItem key={lang} value={lang}>{lang}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Status Pills */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+                    <button
+                      onClick={() => setTemplateStatusTab('ALL')}
+                      className={cn(
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        templateStatusTab === 'ALL'
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <MessageSquare className={cn('w-3.5 h-3.5', templateStatusTab === 'ALL' ? 'text-white' : 'text-gray-500')} />
+                      All ({templateCounts.ALL})
+                    </button>
                     <button
                       onClick={() => setTemplateStatusTab('APPROVED')}
                       className={cn(
-                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
                         templateStatusTab === 'APPROVED'
-                          ? 'border-green-500 text-green-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       )}
                     >
-                      <CheckCircle className="w-4 h-4 inline mr-1.5" />
-                      Active
+                      <CheckCircle className={cn('w-3.5 h-3.5', templateStatusTab === 'APPROVED' ? 'text-white' : 'text-green-500')} />
+                      Active ({templateCounts.APPROVED})
                     </button>
                     <button
                       onClick={() => setTemplateStatusTab('PENDING')}
                       className={cn(
-                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
                         templateStatusTab === 'PENDING'
-                          ? 'border-yellow-500 text-yellow-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                          ? 'bg-yellow-500 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       )}
                     >
-                      <RefreshCw className="w-4 h-4 inline mr-1.5" />
-                      Pending Review
+                      <Clock className={cn('w-3.5 h-3.5', templateStatusTab === 'PENDING' ? 'text-white' : 'text-yellow-500')} />
+                      Pending ({templateCounts.PENDING})
                     </button>
                     <button
                       onClick={() => setTemplateStatusTab('LOCAL_ONLY')}
                       className={cn(
-                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
                         templateStatusTab === 'LOCAL_ONLY'
-                          ? 'border-blue-500 text-blue-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       )}
                     >
-                      <FileText className="w-4 h-4 inline mr-1.5" />
-                      Local Only
-                    </button>
-                    <button
-                      onClick={() => setTemplateStatusTab('DELETED')}
-                      className={cn(
-                        'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                        templateStatusTab === 'DELETED'
-                          ? 'border-red-500 text-red-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700'
-                      )}
-                    >
-                      <Trash2 className="w-4 h-4 inline mr-1.5" />
-                      Deleted
+                      <X className={cn('w-3.5 h-3.5', templateStatusTab === 'LOCAL_ONLY' ? 'text-white' : 'text-red-500')} />
+                      Rejected ({templateCounts.LOCAL_ONLY})
                     </button>
                   </div>
 
+                  {/* Content */}
                   {loadingTemplates ? (
-                    <div className="space-y-4">
-                      {[1, 2, 3].map((i) => (
+                    <div className="space-y-3">
+                      {[1, 2, 3, 4, 5].map((i) => (
                         <Card key={i} className="animate-pulse">
-                          <CardContent className="py-6">
-                            <div className="space-y-3">
-                              <div className="h-4 bg-gray-200 rounded w-1/3" />
-                              <div className="h-3 bg-gray-100 rounded w-2/3" />
+                          <CardContent className="py-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 space-y-2">
+                                <div className="h-4 bg-gray-200 rounded w-1/4" />
+                                <div className="h-3 bg-gray-100 rounded w-3/4" />
+                              </div>
+                              <div className="h-6 bg-gray-100 rounded w-16" />
                             </div>
                           </CardContent>
                         </Card>
@@ -1231,165 +1368,276 @@ function SettingsPageContent() {
                         <MessageSquare className="w-12 h-12 text-gray-300 mb-4" />
                         <p className="text-gray-500">No templates found</p>
                         <p className="text-sm text-gray-400 mt-1">
-                          Click &quot;Sync from Meta&quot; to import templates or create a new one
+                          Click &quot;Sync&quot; to import templates or create a new one
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : filteredTemplates.length === 0 ? (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <Search className="w-12 h-12 text-gray-300 mb-4" />
+                        <p className="text-gray-500">No templates match your filters</p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Try adjusting your search or filter criteria
                         </p>
                       </CardContent>
                     </Card>
                   ) : (
-                    <div className="space-y-4">
-                      {templates.map((template) => (
-                        <Card key={template.id}>
-                          <CardContent className="py-4">
-                            <div
-                              className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 cursor-pointer"
-                              onClick={() => setExpandedTemplate(
-                                expandedTemplate === template.id ? null : template.id
-                              )}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-gray-900 truncate">{template.name}</p>
-                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                  {getTemplateBadge(template.status)}
-                                  <Badge variant="outline" className="text-xs">
-                                    {template.category}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs">
-                                    {template.language}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                                  {template.body_text}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setTemplateToDelete(template);
-                                  }}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                                {expandedTemplate === template.id ? (
-                                  <ChevronUp className="w-5 h-5 text-gray-400" />
-                                ) : (
-                                  <ChevronDown className="w-5 h-5 text-gray-400" />
-                                )}
-                              </div>
-                            </div>
-
-                            {expandedTemplate === template.id && (
-                              <div className="mt-4 pt-4 border-t border-gray-100">
-                                {/* WhatsApp-style Preview */}
-                                <div className="bg-[#efeae2] rounded-lg p-4 mb-4">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <Eye className="w-4 h-4 text-[#667781]" />
-                                    <span className="text-xs font-medium text-[#667781]">Message Preview</span>
-                                  </div>
-                                  {/* WhatsApp message bubble */}
-                                  <div className="bg-[#d9fdd3] rounded-lg shadow-sm max-w-[340px] overflow-hidden">
-                                    {/* Media Header */}
-                                    {template.header_type && ['VIDEO', 'IMAGE', 'DOCUMENT'].includes(template.header_type) && (
-                                      <div className="relative bg-[#c8e6c3]">
-                                        {template.header_type === 'VIDEO' && (
-                                          <div className="w-full h-36 flex items-center justify-center">
-                                            <div className="text-center text-[#667781]">
-                                              <PlayCircle className="w-12 h-12 mx-auto" />
-                                              <span className="text-xs mt-1 block">Video</span>
-                                            </div>
-                                          </div>
-                                        )}
-                                        {template.header_type === 'IMAGE' && (
-                                          <div className="w-full h-36 flex items-center justify-center">
-                                            <div className="text-center text-[#667781]">
-                                              <ImageIcon className="w-12 h-12 mx-auto" />
-                                              <span className="text-xs mt-1 block">Image</span>
-                                            </div>
-                                          </div>
-                                        )}
-                                        {template.header_type === 'DOCUMENT' && (
-                                          <div className="w-full h-24 flex items-center justify-center">
-                                            <div className="text-center text-[#667781]">
-                                              <File className="w-10 h-10 mx-auto" />
-                                              <span className="text-xs mt-1 block">Document</span>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                    {/* Text Header */}
-                                    {template.header_text && (
-                                      <p className="text-sm font-semibold text-[#111b21] px-3 pt-2">
-                                        {template.header_text}
-                                      </p>
-                                    )}
-                                    {/* Body */}
-                                    <p className="text-sm text-[#111b21] whitespace-pre-wrap px-3 py-2">
-                                      {template.body_text}
-                                    </p>
-                                    {/* Footer */}
-                                    {template.footer_text && (
-                                      <p className="text-xs text-[#667781] px-3 pb-2">
-                                        {template.footer_text}
-                                      </p>
-                                    )}
-                                    {/* Buttons */}
-                                    {template.buttons_json?.buttons && template.buttons_json.buttons.length > 0 && (
-                                      <div className="border-t border-[#c8e6c3] divide-y divide-[#c8e6c3]">
-                                        {template.buttons_json.buttons.map((btn, idx) => (
-                                          <div key={idx} className="px-3 py-2 text-center text-sm text-[#00a884] font-medium">
-                                            {btn.type === 'URL' && '🔗 '}
-                                            {btn.type === 'PHONE_NUMBER' && '📞 '}
-                                            {btn.type === 'QUICK_REPLY' && '💬 '}
-                                            {btn.type === 'COPY_CODE' && '📋 '}
-                                            {btn.text}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Template Details */}
-                                <div className="space-y-3">
-                                  {template.rejection_reason && (
-                                    <div className="p-3 bg-red-50 rounded-md">
-                                      <p className="text-xs text-red-600 font-medium">Rejection Reason</p>
-                                      <p className="text-sm text-red-700">{template.rejection_reason}</p>
+                    <>
+                      {/* Template List */}
+                      <div className="space-y-2">
+                        {paginatedTemplates.map((template) => (
+                          <Card
+                            key={template.id}
+                            className="cursor-pointer transition-all hover:bg-gray-50 active:bg-gray-100"
+                            onClick={() => setSelectedTemplate(template)}
+                          >
+                            <CardContent className="p-3 sm:p-4">
+                              {/* Mobile: Stack layout, Desktop: Row layout */}
+                              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
+                                <div className="flex-1 min-w-0">
+                                  {/* Name and badges row */}
+                                  <div className="flex items-center justify-between sm:justify-start gap-2 mb-1">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="font-medium text-gray-900 truncate">{template.name}</span>
+                                      <Badge variant="outline" className="text-xs flex-shrink-0">{template.language}</Badge>
                                     </div>
-                                  )}
-                                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400">
-                                    {template.header_type && (
-                                      <span className="flex items-center gap-1">
-                                        <span className="font-medium text-gray-500">Header:</span> {template.header_type}
-                                      </span>
-                                    )}
-                                    {template.meta_template_id && (
-                                      <span className="flex items-center gap-1">
-                                        <span className="font-medium text-gray-500">Meta ID:</span> {template.meta_template_id}
-                                      </span>
-                                    )}
-                                    <span className="flex items-center gap-1">
-                                      <span className="font-medium text-gray-500">Created:</span> {new Date(template.created_at).toLocaleDateString()}
-                                    </span>
+                                    {/* Mobile: Status badge on same row */}
+                                    <div className="sm:hidden flex items-center gap-1">
+                                      {getTemplateBadge(template.status)}
+                                    </div>
                                   </div>
+                                  {/* Preview text */}
+                                  <p className="text-sm text-gray-500 line-clamp-2 sm:line-clamp-1">
+                                    {template.body_text}
+                                  </p>
+                                </div>
+                                {/* Desktop: Status and actions */}
+                                <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+                                  {getTemplateBadge(template.status)}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setTemplateToDelete(template);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
                                 </div>
                               </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {/* Pagination */}
+                      {totalTemplatePages > 1 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4">
+                          <p className="text-sm text-gray-500 order-2 sm:order-1">
+                            {((currentTemplatePage - 1) * TEMPLATES_PER_PAGE) + 1}-{Math.min(currentTemplatePage * TEMPLATES_PER_PAGE, filteredTemplates.length)} of {filteredTemplates.length}
+                          </p>
+                          <div className="flex items-center gap-1 order-1 sm:order-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentTemplatePage(p => Math.max(1, p - 1))}
+                              disabled={currentTemplatePage === 1}
+                              className="h-9 px-3"
+                            >
+                              <ChevronLeft className="w-4 h-4 mr-1" />
+                              Prev
+                            </Button>
+                            <div className="hidden sm:flex items-center gap-1">
+                              {Array.from({ length: Math.min(5, totalTemplatePages) }, (_, i) => {
+                                let pageNum: number;
+                                if (totalTemplatePages <= 5) {
+                                  pageNum = i + 1;
+                                } else if (currentTemplatePage <= 3) {
+                                  pageNum = i + 1;
+                                } else if (currentTemplatePage >= totalTemplatePages - 2) {
+                                  pageNum = totalTemplatePages - 4 + i;
+                                } else {
+                                  pageNum = currentTemplatePage - 2 + i;
+                                }
+                                return (
+                                  <Button
+                                    key={pageNum}
+                                    variant={currentTemplatePage === pageNum ? 'default' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => setCurrentTemplatePage(pageNum)}
+                                    className="h-9 w-9 p-0"
+                                  >
+                                    {pageNum}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            <span className="sm:hidden text-sm text-gray-600 px-2">
+                              {currentTemplatePage} / {totalTemplatePages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setCurrentTemplatePage(p => Math.min(totalTemplatePages, p + 1))}
+                              disabled={currentTemplatePage === totalTemplatePages}
+                              className="h-9 px-3"
+                            >
+                              Next
+                              <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
 
+              {/* Template Detail Dialog */}
+              <Dialog open={!!selectedTemplate} onOpenChange={(open) => !open && setSelectedTemplate(null)}>
+                <DialogContent className="w-[95vw] max-w-[600px] max-h-[85vh] overflow-y-auto">
+                  {selectedTemplate && (
+                    <>
+                      <DialogHeader>
+                        <DialogTitle className="text-lg">{selectedTemplate.name}</DialogTitle>
+                        <div className="flex items-center gap-2 mt-1">
+                          {getTemplateBadge(selectedTemplate.status)}
+                          <Badge variant="outline" className="text-xs">{selectedTemplate.category}</Badge>
+                          <Badge variant="outline" className="text-xs">{selectedTemplate.language}</Badge>
+                        </div>
+                      </DialogHeader>
+
+                      {/* WhatsApp Preview */}
+                      <div className="bg-[#efeae2] rounded-lg p-4 my-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Eye className="w-4 h-4 text-[#667781]" />
+                          <span className="text-xs font-medium text-[#667781]">Message Preview</span>
+                        </div>
+                        <div className="bg-[#d9fdd3] rounded-lg shadow-sm max-w-[320px] overflow-hidden">
+                          {/* Media Header */}
+                          {selectedTemplate.header_type && ['VIDEO', 'IMAGE', 'DOCUMENT'].includes(selectedTemplate.header_type) && (
+                            <div className="relative bg-[#c8e6c3]">
+                              {selectedTemplate.header_type === 'VIDEO' && (
+                                <div className="w-full h-32 flex items-center justify-center">
+                                  <div className="text-center text-[#667781]">
+                                    <PlayCircle className="w-10 h-10 mx-auto" />
+                                    <span className="text-xs mt-1 block">Video</span>
+                                  </div>
+                                </div>
+                              )}
+                              {selectedTemplate.header_type === 'IMAGE' && (
+                                <div className="w-full h-32 flex items-center justify-center">
+                                  <div className="text-center text-[#667781]">
+                                    <ImageIcon className="w-10 h-10 mx-auto" />
+                                    <span className="text-xs mt-1 block">Image</span>
+                                  </div>
+                                </div>
+                              )}
+                              {selectedTemplate.header_type === 'DOCUMENT' && (
+                                <div className="w-full h-20 flex items-center justify-center">
+                                  <div className="text-center text-[#667781]">
+                                    <File className="w-8 h-8 mx-auto" />
+                                    <span className="text-xs mt-1 block">Document</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* Text Header */}
+                          {selectedTemplate.header_text && (
+                            <p className="text-sm font-semibold text-[#111b21] px-3 pt-2">
+                              {selectedTemplate.header_text}
+                            </p>
+                          )}
+                          {/* Body */}
+                          <p className="text-sm text-[#111b21] whitespace-pre-wrap px-3 py-2">
+                            {selectedTemplate.body_text}
+                          </p>
+                          {/* Footer */}
+                          {selectedTemplate.footer_text && (
+                            <p className="text-xs text-[#667781] px-3 pb-2">
+                              {selectedTemplate.footer_text}
+                            </p>
+                          )}
+                          {/* Buttons */}
+                          {selectedTemplate.buttons_json?.buttons && selectedTemplate.buttons_json.buttons.length > 0 && (
+                            <div className="border-t border-[#c8e6c3] divide-y divide-[#c8e6c3]">
+                              {selectedTemplate.buttons_json.buttons.map((btn, idx) => (
+                                <div key={idx} className="px-3 py-2 text-center text-sm text-[#00a884] font-medium">
+                                  {btn.type === 'URL' && <Link className="w-3 h-3 inline mr-1" />}
+                                  {btn.type === 'PHONE_NUMBER' && <Phone className="w-3 h-3 inline mr-1" />}
+                                  {btn.type === 'QUICK_REPLY' && <MessageSquare className="w-3 h-3 inline mr-1" />}
+                                  {btn.text}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Rejection Reason */}
+                      {selectedTemplate.rejection_reason && (
+                        <div className="p-3 bg-red-50 rounded-md mb-4">
+                          <p className="text-xs text-red-600 font-medium">Rejection Reason</p>
+                          <p className="text-sm text-red-700">{selectedTemplate.rejection_reason}</p>
+                        </div>
+                      )}
+
+                      {/* Template Metadata */}
+                      <div className="grid grid-cols-2 gap-3 text-sm border-t pt-4">
+                        {selectedTemplate.meta_template_id && (
+                          <div>
+                            <p className="text-xs text-gray-500">Meta ID</p>
+                            <p className="font-mono text-gray-900 text-xs">{selectedTemplate.meta_template_id}</p>
+                          </div>
+                        )}
+                        {selectedTemplate.header_type && (
+                          <div>
+                            <p className="text-xs text-gray-500">Header Type</p>
+                            <p className="text-gray-900">{selectedTemplate.header_type}</p>
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-xs text-gray-500">Created</p>
+                          <p className="text-gray-900">{new Date(selectedTemplate.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Updated</p>
+                          <p className="text-gray-900">{new Date(selectedTemplate.updated_at).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+
+                      <DialogFooter className="mt-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setSelectedTemplate(null)}
+                        >
+                          Close
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => {
+                            setTemplateToDelete(selectedTemplate);
+                            setSelectedTemplate(null);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </Button>
+                      </DialogFooter>
+                    </>
+                  )}
+                </DialogContent>
+              </Dialog>
+
               {/* User Management Section (Admin only) */}
               {activeSection === 'users' && isAdmin && (
-                <div className="space-y-6">
+                <div className="space-y-4">
+                  {/* Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <h1 className="text-xl sm:text-2xl font-bold text-gray-900">User Management</h1>
@@ -1408,91 +1656,79 @@ function SettingsPageContent() {
                     </Button>
                   </div>
 
-                  {/* User Filter Tabs */}
-                  <div className="border-b border-gray-200">
-                    <div className="flex gap-1 overflow-x-auto pb-px no-scrollbar">
-                      {/* Status Tabs */}
-                      <button
-                        onClick={() => setUserFilterTab('all')}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                          userFilterTab === 'all'
-                            ? 'border-gray-900 text-gray-900'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                      >
-                        <Users className="w-4 h-4" />
-                        All
-                        <Badge variant="secondary" className="ml-1 text-xs">{userCounts.all}</Badge>
-                      </button>
-                      <button
-                        onClick={() => setUserFilterTab('active')}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                          userFilterTab === 'active'
-                            ? 'border-green-600 text-green-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                      >
-                        <UserCheck className="w-4 h-4" />
-                        Active
-                        <Badge className="ml-1 text-xs bg-green-100 text-green-700">{userCounts.active}</Badge>
-                      </button>
-                      <button
-                        onClick={() => setUserFilterTab('inactive')}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                          userFilterTab === 'inactive'
-                            ? 'border-red-600 text-red-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                      >
-                        <UserX className="w-4 h-4" />
-                        Inactive
-                        <Badge className="ml-1 text-xs bg-red-100 text-red-700">{userCounts.inactive}</Badge>
-                      </button>
-                      <div className="w-px bg-gray-200 mx-2 self-stretch" />
-                      {/* Role Tabs */}
-                      <button
-                        onClick={() => setUserFilterTab('admin')}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                          userFilterTab === 'admin'
-                            ? 'border-purple-600 text-purple-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                      >
-                        <Crown className="w-4 h-4" />
-                        Admin
-                        <Badge className="ml-1 text-xs bg-purple-100 text-purple-700">{userCounts.admin}</Badge>
-                      </button>
-                      <button
-                        onClick={() => setUserFilterTab('manager')}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                          userFilterTab === 'manager'
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                      >
-                        <Briefcase className="w-4 h-4" />
-                        Manager
-                        <Badge className="ml-1 text-xs bg-blue-100 text-blue-700">{userCounts.manager}</Badge>
-                      </button>
-                      <button
-                        onClick={() => setUserFilterTab('sdr')}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
-                          userFilterTab === 'sdr'
-                            ? 'border-gray-600 text-gray-900'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        )}
-                      >
-                        <UserCog className="w-4 h-4" />
-                        SDR
-                        <Badge variant="secondary" className="ml-1 text-xs">{userCounts.sdr}</Badge>
-                      </button>
+                  {/* Search & Filter Bar */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by email..."
+                        value={userSearchQuery}
+                        onChange={(e) => setUserSearchQuery(e.target.value)}
+                        className="pl-9 h-10"
+                      />
                     </div>
+                    <Select value={userFilterTab} onValueChange={(value: UserFilterTab) => setUserFilterTab(value)}>
+                      <SelectTrigger className="flex-1 sm:flex-none sm:w-[150px] h-10">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Role Pills */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+                    <button
+                      onClick={() => setUserRoleFilter('all')}
+                      className={cn(
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        userRoleFilter === 'all'
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <Users className={cn('w-3.5 h-3.5', userRoleFilter === 'all' ? 'text-white' : 'text-gray-500')} />
+                      All ({userCounts.all})
+                    </button>
+                    <button
+                      onClick={() => setUserRoleFilter('admin')}
+                      className={cn(
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        userRoleFilter === 'admin'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <Crown className={cn('w-3.5 h-3.5', userRoleFilter === 'admin' ? 'text-white' : 'text-purple-500')} />
+                      Admin ({userCounts.admin})
+                    </button>
+                    <button
+                      onClick={() => setUserRoleFilter('manager')}
+                      className={cn(
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        userRoleFilter === 'manager'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <Briefcase className={cn('w-3.5 h-3.5', userRoleFilter === 'manager' ? 'text-white' : 'text-blue-500')} />
+                      Manager ({userCounts.manager})
+                    </button>
+                    <button
+                      onClick={() => setUserRoleFilter('sdr')}
+                      className={cn(
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        userRoleFilter === 'sdr'
+                          ? 'bg-gray-700 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <UserCog className={cn('w-3.5 h-3.5', userRoleFilter === 'sdr' ? 'text-white' : 'text-gray-500')} />
+                      SDR ({userCounts.sdr})
+                    </button>
                   </div>
 
                   {loadingUsers ? (
@@ -1514,12 +1750,20 @@ function SettingsPageContent() {
                   ) : filteredUsers.length === 0 ? (
                     <Card>
                       <CardContent className="flex flex-col items-center justify-center py-12">
-                        <Users className="w-12 h-12 text-gray-300 mb-4" />
-                        <p className="text-gray-500">
-                          {users.length === 0
-                            ? 'No users found'
-                            : `No ${userFilterTab === 'all' ? '' : userFilterTab + ' '}users`}
-                        </p>
+                        {userSearchQuery ? (
+                          <>
+                            <Search className="w-12 h-12 text-gray-300 mb-4" />
+                            <p className="text-gray-500">No users match your search</p>
+                            <p className="text-sm text-gray-400 mt-1">Try adjusting your filters</p>
+                          </>
+                        ) : (
+                          <>
+                            <Users className="w-12 h-12 text-gray-300 mb-4" />
+                            <p className="text-gray-500">
+                              {users.length === 0 ? 'No users found' : 'No users match your filters'}
+                            </p>
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   ) : (

@@ -65,11 +65,13 @@ export default function Home() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
-      {/* Top Header */}
-      <Header activeTab="inbox" />
+      {/* Top Header - hidden on mobile when conversation is open */}
+      <div className={selectedLead ? 'hidden md:block' : ''}>
+        <Header activeTab="inbox" />
+      </div>
 
-      {/* Main Content - pb-14 on mobile for bottom nav */}
-      <div className="flex-1 flex overflow-hidden pb-14 md:pb-0">
+      {/* Main Content - pb-14 on mobile for bottom nav, pb-0 when header hidden */}
+      <div className={`flex-1 flex overflow-hidden md:pb-0 ${selectedLead ? 'pb-0' : 'pb-14'}`}>
         {/* Left Sidebar - Categories */}
         <LeadSidebar
           selectedCategory={selectedCategory}
