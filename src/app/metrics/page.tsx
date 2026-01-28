@@ -204,7 +204,7 @@ export default function FunnelMetricsPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
-      <Header activeTab="funnel" />
+      <Header activeTab="metrics" />
 
       <div className="flex-1 overflow-auto p-6 pb-20 md:pb-6">
         <div className="max-w-7xl mx-auto space-y-6">
@@ -214,7 +214,7 @@ export default function FunnelMetricsPage() {
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
                   <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600" />
-                  CRM Funnel Metrics
+                  CRM Metrics
                 </h1>
                 <p className="text-sm sm:text-base text-gray-500 mt-1">Track your sales funnel volume and conversion rates</p>
               </div>

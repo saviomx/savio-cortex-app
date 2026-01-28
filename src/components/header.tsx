@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 
-type TabType = 'inbox' | 'funnel' | 'ai-agent' | 'ai-brain' | 'settings';
+type TabType = 'inbox' | 'metrics' | 'ai-agent' | 'ai-brain' | 'settings';
 
 interface HeaderProps {
   activeTab?: TabType;
@@ -23,7 +23,7 @@ interface HeaderProps {
 
 const allTabs = [
   { id: 'inbox' as const, label: 'Inbox', icon: Mail, href: '/', adminOnly: false },
-  { id: 'funnel' as const, label: 'Funnel', icon: BarChart3, href: '/funnel', adminOnly: false },
+  { id: 'metrics' as const, label: 'Metrics', icon: BarChart3, href: '/metrics', adminOnly: false },
   { id: 'ai-agent' as const, label: 'AI Agent', icon: Bot, href: '/ai-agent', adminOnly: false },
   { id: 'ai-brain' as const, label: 'AI Brain', icon: Brain, href: '/ai-brain', adminOnly: true },
   { id: 'settings' as const, label: 'Settings', icon: Settings, href: '/settings', adminOnly: true },

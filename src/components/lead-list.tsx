@@ -61,6 +61,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [newLeadsCount, setNewLeadsCount] = useState(0); // New conversations available
 
   // Mobile filter state
   const [mobileDateFrom, setMobileDateFrom] = useState<string>(dateFrom || '');
@@ -75,12 +76,12 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Stable fetch function that reads from refs
-  const fetchLeads = useCallback(async (cursor?: string | null, append = false) => {
+  const fetchLeads = useCallback(async (cursor?: string | null, append = false, isBackgroundRefresh = false) => {
     const { selectedCategory, searchQuery, dateFrom, dateTo, windowStatus } = filtersRef.current;
 
     try {
-      if (!append) setLoading(true);
-      else setLoadingMore(true);
+      if (!append && !isBackgroundRefresh) setLoading(true);
+      if (append) setLoadingMore(true);
 
       const params = new URLSearchParams({
         lead_status: selectedCategory,
@@ -107,14 +108,39 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
 
       if (response.ok) {
         const data = await response.json();
+        const freshLeads: Lead[] = data.data || [];
+
         if (append) {
-          setLeads(prev => [...prev, ...(data.data || [])]);
+          // Load more: append new leads
+          setLeads(prev => [...prev, ...freshLeads]);
+        } else if (isBackgroundRefresh) {
+          // Background refresh: update existing leads in-place, detect new ones
+          setLeads(prev => {
+            if (prev.length === 0) return freshLeads;
+
+            // Create a set of current lead IDs for quick lookup
+            const currentIds = new Set(prev.map(lead => lead.id));
+
+            // Count new leads (in fresh data but not in current list)
+            const newLeads = freshLeads.filter(lead => !currentIds.has(lead.id));
+            if (newLeads.length > 0) {
+              setNewLeadsCount(count => count + newLeads.length);
+            }
+
+            // Update existing leads with fresh data (preserves order and scroll)
+            const freshLeadsMap = new Map(freshLeads.map(lead => [lead.id, lead]));
+            return prev.map(lead => freshLeadsMap.get(lead.id) || lead);
+          });
+          // Update total count to reflect server state
+          setTotalCount(data.total_count || 0);
         } else {
-          setLeads(data.data || []);
+          // Fresh fetch: replace all leads
+          setLeads(freshLeads);
+          setNewLeadsCount(0); // Clear new leads indicator
+          setTotalCount(data.total_count || 0);
+          setHasMore(data.has_more || false);
+          setNextCursor(data.next_cursor || null);
         }
-        setTotalCount(data.total_count || 0);
-        setHasMore(data.has_more || false);
-        setNextCursor(data.next_cursor || null);
       }
     } catch (error) {
       console.error('Error fetching leads:', error);
@@ -124,9 +150,15 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
     }
   }, []); // No dependencies - uses refs
 
+  // Load new conversations (user clicked the banner)
+  const loadNewConversations = useCallback(() => {
+    setNewLeadsCount(0);
+    fetchLeads();
+  }, [fetchLeads]);
+
   // Setup polling interval once on mount
   useEffect(() => {
-    intervalRef.current = setInterval(() => fetchLeads(), 10000);
+    intervalRef.current = setInterval(() => fetchLeads(null, false, true), 10000);
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -140,7 +172,10 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
   }, [selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, fetchLeads]);
 
   useImperativeHandle(ref, () => ({
-    refresh: () => fetchLeads(),
+    refresh: () => {
+      setNewLeadsCount(0);
+      fetchLeads();
+    },
   }));
 
   const handleLoadMore = () => {
@@ -347,6 +382,17 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
           </div>
         )}
       </div>
+
+      {/* New Conversations Banner */}
+      {newLeadsCount > 0 && (
+        <button
+          onClick={loadNewConversations}
+          className="w-full px-4 py-2 bg-blue-50 hover:bg-blue-100 border-b border-blue-100 text-sm text-blue-600 font-medium transition-colors flex items-center justify-center gap-2"
+        >
+          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+          {newLeadsCount} new conversation{newLeadsCount > 1 ? 's' : ''} - tap to load
+        </button>
+      )}
 
       {/* Lead List */}
       <ScrollArea className="flex-1 min-h-0">

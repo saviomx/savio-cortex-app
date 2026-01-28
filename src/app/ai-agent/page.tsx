@@ -342,14 +342,14 @@ export default function AIAgentPage() {
           </div>
 
           {/* Charts with Tabs */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
             <Tabs defaultValue="conversations" className="w-full">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">Daily Trends</h2>
-                <TabsList>
-                  <TabsTrigger value="conversations">Conversations</TabsTrigger>
-                  <TabsTrigger value="demos">Demos</TabsTrigger>
-                  <TabsTrigger value="conversion">Conversion Rate</TabsTrigger>
+                <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+                  <TabsTrigger value="conversations" className="text-xs sm:text-sm">Conversations</TabsTrigger>
+                  <TabsTrigger value="demos" className="text-xs sm:text-sm">Demos</TabsTrigger>
+                  <TabsTrigger value="conversion" className="text-xs sm:text-sm">Conversion</TabsTrigger>
                 </TabsList>
               </div>
 
