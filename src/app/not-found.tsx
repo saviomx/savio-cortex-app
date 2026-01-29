@@ -2,15 +2,18 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Home, ArrowLeft } from 'lucide-react';
+import { Home, ArrowLeft, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function NotFound() {
+  const { isAuthenticated, isLoading } = useAuth();
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Simple header with logo */}
       <header className="h-14 border-b border-gray-200 bg-white flex items-center px-4">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href={isAuthenticated ? "/" : "/login"} className="flex items-center gap-2">
           <Image
             src="/savio-logo-DdP6MEtP.png"
             alt="Savio"
@@ -43,12 +46,23 @@ export default function NotFound() {
               <ArrowLeft className="w-4 h-4" />
               Go back
             </Button>
-            <Button asChild className="gap-2">
-              <Link href="/">
-                <Home className="w-4 h-4" />
-                Back to Inbox
-              </Link>
-            </Button>
+            {!isLoading && (
+              isAuthenticated ? (
+                <Button asChild className="gap-2">
+                  <Link href="/">
+                    <Home className="w-4 h-4" />
+                    Back to Inbox
+                  </Link>
+                </Button>
+              ) : (
+                <Button asChild className="gap-2">
+                  <Link href="/login">
+                    <LogIn className="w-4 h-4" />
+                    Go to Login
+                  </Link>
+                </Button>
+              )
+            )}
           </div>
         </div>
       </main>
