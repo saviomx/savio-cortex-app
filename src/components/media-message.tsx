@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Download, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -11,9 +11,11 @@ type Props = {
   caption?: string | null;
   filename?: string | null;
   isOutbound?: boolean;
+  onImageClick?: (url: string) => void;
+  onPdfPreview?: (url: string, filename: string) => void;
 };
 
-export function MediaMessage({ mediaId, messageType, caption, filename, isOutbound }: Props) {
+export function MediaMessage({ mediaId, messageType, caption, filename, isOutbound, onImageClick, onPdfPreview }: Props) {
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -47,16 +49,28 @@ export function MediaMessage({ mediaId, messageType, caption, filename, isOutbou
     );
   }
 
+  const isPdf = filename?.toLowerCase().endsWith('.pdf');
+
   return (
     <div>
       {messageType === 'image' && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={mediaUrl}
-          alt={caption || 'Image'}
-          className="rounded max-w-full h-auto max-h-96"
-          onError={handleLoadError}
-        />
+        <div
+          className={cn("relative", onImageClick && "group cursor-pointer")}
+          onClick={() => onImageClick?.(mediaUrl)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={mediaUrl}
+            alt={caption || 'Image'}
+            className="rounded max-w-full h-auto max-h-96"
+            onError={handleLoadError}
+          />
+          {onImageClick && (
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+              <Eye className="w-8 h-8 text-white" />
+            </div>
+          )}
+        </div>
       )}
 
       {messageType === 'video' && (
@@ -73,15 +87,26 @@ export function MediaMessage({ mediaId, messageType, caption, filename, isOutbou
       )}
 
       {messageType === 'document' && (
-        <a
-          href={mediaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm underline cursor-pointer hover:opacity-80 transition-opacity text-[#00a884]"
-        >
-          <FileText className="h-4 w-4" />
-          {filename || 'Download document'}
-        </a>
+        <div className="flex items-center gap-2">
+          <span className="text-sm">📎 {filename || 'Document'}</span>
+          {isPdf && onPdfPreview && (
+            <button
+              onClick={() => onPdfPreview(mediaUrl, filename || 'Document.pdf')}
+              className="p-1.5 rounded hover:bg-black/10 transition-colors"
+              title="Preview"
+            >
+              <Eye className="h-4 w-4 text-[#667781]" />
+            </button>
+          )}
+          <a
+            href={mediaUrl}
+            download={filename || 'document'}
+            className="p-1.5 rounded hover:bg-black/10 transition-colors"
+            title="Download"
+          >
+            <Download className="h-4 w-4 text-[#667781]" />
+          </a>
+        </div>
       )}
     </div>
   );

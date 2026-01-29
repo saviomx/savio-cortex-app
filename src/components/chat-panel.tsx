@@ -46,6 +46,9 @@ import {
   ArrowRight,
   AlertCircle,
   Brain,
+  MapPin,
+  Eye,
+  X,
 } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
@@ -60,6 +63,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import { cn, formatNumber } from '@/lib/utils';
 import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
 import { formatDateDivider, shouldShowDateDivider, formatChatBubbleTime } from '@/lib/utils/date';
@@ -525,12 +534,39 @@ export const ChatPanel = memo(function ChatPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]); // Only depend on leadId - callbacks use refs
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change or conversation loads
+  const messageCount = conversation?.conversation?.length ?? 0;
+  const prevLeadIdRef = useRef<string | number | null>(null);
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const isNewConversation = prevLeadIdRef.current !== leadId;
+    prevLeadIdRef.current = leadId;
+
+    const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollIntoView({ behavior, block: 'end' });
+      }
+    };
+
+    // Scroll on initial load and message updates
+    if (messageCount > 0) {
+      // For new conversations, do a quick initial scroll then smooth scroll
+      // For message updates in same conversation, just smooth scroll
+      const timeoutId = setTimeout(() => {
+        scrollToBottom(isNewConversation ? 'instant' : 'smooth');
+      }, 50);
+
+      // Smooth scroll after content settles (images loaded, etc.)
+      const delayedTimeoutId = setTimeout(() => {
+        scrollToBottom('smooth');
+      }, 300);
+
+      return () => {
+        clearTimeout(timeoutId);
+        clearTimeout(delayedTimeoutId);
+      };
     }
-  }, [conversation?.conversation?.length]);
+  }, [messageCount, leadId]);
 
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !leadId || sending) return;
@@ -1002,6 +1038,8 @@ function renderTextWithLinks(text: string, className?: string): React.ReactNode 
 // Inverted: We are the chatbot (assistant), so our messages go on the right
 function MessageBubble({ message, showDebug }: { message: Message; showDebug?: boolean }) {
   const [debugExpanded, setDebugExpanded] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewPdf, setPreviewPdf] = useState<{ url: string; filename: string } | null>(null);
   const isAssistant = message.role === 'assistant';
   const isSystem = message.role === 'system';
   const formattedTime = formatChatBubbleTime(message.created_at);
@@ -1027,6 +1065,57 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
 
   const hasMedia = effectiveMediaUrl && effectivePayloadType;
 
+  // Check for location message type (no media_url, but has payload_type)
+  const isLocationMessage = payloadType === 'location';
+  const locationData = isLocationMessage ? (() => {
+    // Parse latitude and longitude from content
+    const latMatch = message.content?.match(/Lat:\s*([-\d.]+)/i);
+    const lngMatch = message.content?.match(/Long:\s*([-\d.]+)/i);
+    if (latMatch && lngMatch) {
+      const lat = parseFloat(latMatch[1]);
+      const lng = parseFloat(lngMatch[1]);
+      // Extract name and address from content lines
+      const lines = message.content?.split('\n') || [];
+      let locationName = '';
+      let locationAddress = '';
+      for (const line of lines) {
+        if (!line.includes('Lat:') && !line.includes('Long:')) {
+          if (!locationName) {
+            locationName = line.trim();
+          } else {
+            locationAddress = (locationAddress ? locationAddress + ', ' : '') + line.trim();
+          }
+        }
+      }
+      return { lat, lng, name: locationName, address: locationAddress };
+    }
+    return null;
+  })() : null;
+
+  // Check for contacts message type (no media_url, but has payload_type)
+  const isContactsMessage = payloadType === 'contacts';
+  const contactsData = isContactsMessage ? (() => {
+    // Parse "Contact(s) shared:\nName: X, Phone: Y" format from content
+    const contacts: Array<{ name?: string; phone?: string; email?: string }> = [];
+    const lines = message.content?.split('\n') || [];
+    for (const line of lines) {
+      // Capture name until comma or end of segment
+      const nameMatch = line.match(/Name:\s*([^,]+?)(?:,|$)/i);
+      // Capture full phone number including spaces (until Email: or end of line)
+      const phoneMatch = line.match(/Phone:\s*([+\d\s()-]+?)(?:,\s*Email:|$)/i);
+      // Capture email
+      const emailMatch = line.match(/Email:\s*([^\s,]+)/i);
+      if (nameMatch || phoneMatch) {
+        contacts.push({
+          name: nameMatch?.[1]?.trim(),
+          phone: phoneMatch?.[1]?.trim(),
+          email: emailMatch?.[1]?.trim(),
+        });
+      }
+    }
+    return contacts.length > 0 ? contacts : null;
+  })() : null;
+
   // Check if message failed and get failure reason
   const messageFailed = metadata?.kapso_status === 'failed' || metadata?.status === 'failed';
   const failureReason = metadata?.failure_reason as { code?: number; title?: string } | undefined;
@@ -1038,7 +1127,8 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
   const strippedContent = templateMediaUrl
     ? message.content?.replace(/^\[(Video|Image|Document)\]\n*/i, '')
     : message.content;
-  const displayContent = hasMedia && isPlaceholderContent ? mediaMetadata?.caption : strippedContent;
+  // Don't show raw content when we have special message renderers (media, location, contacts)
+  const displayContent = (hasMedia && isPlaceholderContent) || locationData || contactsData ? mediaMetadata?.caption : strippedContent;
 
   // Only show system messages when debug mode is active
   if (isSystem) {
@@ -1076,19 +1166,27 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
             isAssistant
               ? 'bg-blue-600 text-white rounded-br-md'
               : 'bg-gray-100 text-gray-900 rounded-bl-md',
-            hasMedia ? 'p-1 w-fit' : 'px-4 py-2.5'
+            (hasMedia || locationData || contactsData) ? 'p-1 w-fit' : 'px-4 py-2.5'
           )}
         >
           {/* Media content */}
           {hasMedia && (
             <div className={cn('flex flex-col items-center', displayContent ? 'mb-1' : '')}>
               {effectivePayloadType === 'image' && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={effectiveMediaUrl}
-                  alt={mediaMetadata?.caption || 'Image'}
-                  className="rounded-xl max-w-[280px] max-h-[350px] object-contain"
-                />
+                <div
+                  className="relative group cursor-pointer"
+                  onClick={() => setPreviewImage(effectiveMediaUrl || null)}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={effectiveMediaUrl}
+                    alt={mediaMetadata?.caption || 'Image'}
+                    className="rounded-xl max-w-[280px] max-h-[350px] object-contain"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center">
+                    <Eye className="w-8 h-8 text-white" />
+                  </div>
+                </div>
               )}
               {effectivePayloadType === 'video' && (
                 <video
@@ -1107,26 +1205,55 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
                 </div>
               )}
               {effectivePayloadType === 'document' && (
-                <a
-                  href={effectiveMediaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={cn(
-                    'flex items-center gap-2 p-3 rounded-xl',
-                    isAssistant ? 'bg-blue-700 hover:bg-blue-800' : 'bg-gray-200 hover:bg-gray-300'
-                  )}
-                >
-                  <FileText className="w-8 h-8" />
+                <div className={cn(
+                  'flex items-center gap-3 p-3 rounded-xl min-w-[280px]',
+                  isAssistant ? 'bg-blue-700' : 'bg-gray-100 border border-gray-200'
+                )}>
+                  <div className={cn(
+                    'w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0',
+                    isAssistant ? 'bg-blue-600' : 'bg-red-100'
+                  )}>
+                    <FileText className={cn('w-6 h-6', isAssistant ? 'text-white' : 'text-red-600')} />
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
+                    <p className={cn('text-sm font-medium truncate', isAssistant ? 'text-white' : 'text-gray-900')}>
                       {mediaMetadata?.filename || 'Document'}
                     </p>
                     <p className={cn('text-xs', isAssistant ? 'text-blue-200' : 'text-gray-500')}>
                       {mediaMetadata?.mime_type || 'File'}
                     </p>
                   </div>
-                  <Download className="w-4 h-4" />
-                </a>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewPdf({
+                          url: effectiveMediaUrl || '',
+                          filename: mediaMetadata?.filename || 'Document'
+                        });
+                      }}
+                      className={cn(
+                        'p-2 rounded-lg transition-colors',
+                        isAssistant ? 'hover:bg-blue-600 text-white' : 'hover:bg-gray-200 text-gray-600'
+                      )}
+                      title="Preview"
+                    >
+                      <Eye className="w-5 h-5" />
+                    </button>
+                    <a
+                      href={effectiveMediaUrl}
+                      download={mediaMetadata?.filename || 'document'}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        'p-2 rounded-lg transition-colors',
+                        isAssistant ? 'hover:bg-blue-600 text-white' : 'hover:bg-gray-200 text-gray-600'
+                      )}
+                      title="Download"
+                    >
+                      <Download className="w-5 h-5" />
+                    </a>
+                  </div>
+                </div>
               )}
               {effectivePayloadType === 'sticker' && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -1139,11 +1266,123 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
             </div>
           )}
 
+          {/* Location message */}
+          {locationData && (() => {
+            const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+            // Mapbox Static Images API format: /static/{overlay}/{lon},{lat},{zoom}/{width}x{height}
+            const mapUrl = mapboxToken
+              ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+ef4444(${locationData.lng},${locationData.lat})/${locationData.lng},${locationData.lat},15/280x120@2x?access_token=${mapboxToken}`
+              : null;
+
+            return (
+              <a
+                href={`https://www.google.com/maps?q=${locationData.lat},${locationData.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block p-2 hover:opacity-90 transition-opacity min-w-[280px]"
+              >
+                {/* Mapbox static map with fallback */}
+                <div className="w-full h-[120px] rounded-lg overflow-hidden bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative">
+                  {mapUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={mapUrl}
+                      alt="Location map"
+                      className="w-full h-full object-cover absolute inset-0"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <div className="w-full h-full flex items-center justify-center">
+                    <MapPin className="h-10 w-10 text-teal-500 drop-shadow-md" />
+                  </div>
+                </div>
+                {/* Location info */}
+                <div className="mt-2 flex items-start gap-2">
+                  <MapPin className={cn('h-4 w-4 flex-shrink-0 mt-0.5', isAssistant ? 'text-blue-200' : 'text-blue-600')} />
+                  <div className="flex-1 min-w-0">
+                    {locationData.name && (
+                      <p className={cn('text-sm font-medium', isAssistant ? 'text-white' : 'text-gray-900')}>
+                        {locationData.name}
+                      </p>
+                    )}
+                    {locationData.address && (
+                      <p className={cn('text-xs', isAssistant ? 'text-blue-200' : 'text-gray-500')}>
+                        {locationData.address}
+                      </p>
+                    )}
+                    <p className={cn('text-xs mt-1 font-medium', isAssistant ? 'text-blue-200' : 'text-blue-600')}>
+                      Open in Google Maps →
+                    </p>
+                  </div>
+                </div>
+              </a>
+            );
+          })()}
+
+          {/* Contacts message */}
+          {contactsData && (
+            <div className="p-2 space-y-2 min-w-[220px]">
+              {contactsData.map((contact, idx) => (
+                <div key={idx} className={cn(
+                  'rounded-lg p-3',
+                  isAssistant ? 'bg-blue-500' : 'bg-white border border-gray-200'
+                )}>
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0',
+                      isAssistant ? 'bg-blue-400' : 'bg-blue-500'
+                    )}>
+                      <User className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn('font-medium', isAssistant ? 'text-white' : 'text-gray-900')}>
+                        {contact.name || 'Contact'}
+                      </p>
+                    </div>
+                  </div>
+                  {(contact.phone || contact.email) && (
+                    <div className={cn(
+                      'mt-2 pt-2 border-t space-y-1.5',
+                      isAssistant ? 'border-blue-400' : 'border-gray-200'
+                    )}>
+                      {contact.phone && (
+                        <a
+                          href={`tel:${contact.phone.replace(/\s/g, '')}`}
+                          className={cn(
+                            'flex items-center gap-2 text-sm hover:underline',
+                            isAssistant ? 'text-blue-100' : 'text-blue-600'
+                          )}
+                        >
+                          <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span>{contact.phone}</span>
+                        </a>
+                      )}
+                      {contact.email && (
+                        <a
+                          href={`mailto:${contact.email}`}
+                          className={cn(
+                            'flex items-center gap-2 text-sm hover:underline',
+                            isAssistant ? 'text-blue-100' : 'text-blue-600'
+                          )}
+                        >
+                          <Mail className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="break-all">{contact.email}</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Text content (caption or transcribed voice message) */}
           {displayContent && (
             <p className={cn(
               'text-sm whitespace-pre-wrap break-words',
-              hasMedia && 'px-3 pb-2 max-w-[280px]'
+              (hasMedia || locationData || contactsData) && 'px-3 pb-2 max-w-[280px]'
             )}>
               {renderTextWithLinks(displayContent, isAssistant ? 'text-blue-100' : 'text-blue-600')}
             </p>
@@ -1152,7 +1391,7 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
           {/* Timestamp and status */}
           <div className={cn(
             'text-[10px] mt-1 text-right flex items-center justify-end gap-1',
-            hasMedia ? 'px-3 pb-1 max-w-[280px]' : '',
+            (hasMedia || locationData || contactsData) ? 'px-3 pb-1 max-w-[280px]' : '',
             isAssistant ? 'text-blue-200' : 'text-gray-400'
           )}>
             {formattedTime}
@@ -1229,6 +1468,70 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
           )}
         </div>
       </div>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none" showCloseButton={false}>
+          <VisuallyHidden.Root>
+            <DialogTitle>Image Preview</DialogTitle>
+          </VisuallyHidden.Root>
+          <div className="relative flex items-center justify-center min-h-[50vh]">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            {previewImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewImage}
+                alt="Preview"
+                className="max-w-full max-h-[90vh] object-contain"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Preview Dialog */}
+      <Dialog open={!!previewPdf} onOpenChange={() => setPreviewPdf(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0" style={{ width: '900px', height: '80vh' }} showCloseButton={false}>
+          <VisuallyHidden.Root>
+            <DialogTitle>PDF Preview</DialogTitle>
+          </VisuallyHidden.Root>
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+              <span className="font-medium text-sm truncate">{previewPdf?.filename}</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewPdf?.url}
+                  download={previewPdf?.filename}
+                  className="p-2 rounded hover:bg-gray-200 transition-colors"
+                  title="Download"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
+                <button
+                  onClick={() => setPreviewPdf(null)}
+                  className="p-2 rounded hover:bg-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-100">
+              {previewPdf && (
+                <iframe
+                  src={previewPdf.url}
+                  className="w-full h-full border-0"
+                  title="PDF Preview"
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

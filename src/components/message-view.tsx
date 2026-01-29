@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { isValid, differenceInHours } from 'date-fns';
 import { formatChatBubbleTime, formatDateDivider, shouldShowDateDivider } from '@/lib/utils/date';
-import { RefreshCw, Paperclip, Send, X, AlertCircle, MessageSquare, XCircle, ListTree, ArrowLeft } from 'lucide-react';
+import { RefreshCw, Paperclip, Send, X, AlertCircle, MessageSquare, XCircle, ListTree, ArrowLeft, MapPin, User, Phone, Mail, Building, FileText, Download, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MediaMessage } from '@/components/media-message';
 import { TemplateSelectorDialog } from '@/components/template-selector-dialog';
@@ -14,6 +14,10 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
 import type { MediaData } from '@kapso/whatsapp-cloud-api';
 
 type Message = {
@@ -42,6 +46,31 @@ type Message = {
     header_type?: string;
     template?: boolean;
     template_name?: string;
+    // Location data
+    latitude?: number;
+    longitude?: number;
+    location_name?: string;
+    location_address?: string;
+    // Contact data
+    contacts?: Array<{
+      name?: {
+        formatted_name?: string;
+        first_name?: string;
+        last_name?: string;
+      };
+      phones?: Array<{
+        phone?: string;
+        type?: string;
+      }>;
+      emails?: Array<{
+        email?: string;
+        type?: string;
+      }>;
+      org?: {
+        company?: string;
+        title?: string;
+      };
+    }>;
   };
 };
 
@@ -99,6 +128,8 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [showInteractiveDialog, setShowInteractiveDialog] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewPdf, setPreviewPdf] = useState<{ url: string; filename: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -391,8 +422,150 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
                         : 'bg-white text-[#111b21] rounded-bl-none'
                     )}
                   >
-                    {/* Template media (video/image from header) */}
-                    {message.metadata?.header_media_url ? (
+                    {/* Location message - check messageType and parse coordinates from content if needed */}
+                    {message.messageType === 'location' ? (() => {
+                      // Try to get coordinates from metadata or parse from content
+                      let lat = message.metadata?.latitude;
+                      let lng = message.metadata?.longitude;
+                      let locationName = message.metadata?.location_name;
+                      let locationAddress = message.metadata?.location_address;
+
+                      // Parse from content if not in metadata
+                      if (!lat || !lng) {
+                        const latMatch = message.content?.match(/Lat:\s*([-\d.]+)/i);
+                        const lngMatch = message.content?.match(/Long:\s*([-\d.]+)/i);
+                        if (latMatch) lat = parseFloat(latMatch[1]);
+                        if (lngMatch) lng = parseFloat(lngMatch[1]);
+
+                        // Try to extract name and address from content
+                        const lines = message.content?.split('\n') || [];
+                        if (lines.length > 0 && !lines[0].includes('Lat:')) {
+                          locationName = lines[0];
+                        }
+                        if (lines.length > 1 && !lines[1].includes('Lat:')) {
+                          locationAddress = lines.slice(1).join(', ').replace(/Lat:.*$/, '').trim();
+                        }
+                      }
+
+                      return lat && lng ? (
+                      <div className="mb-2">
+                        <a
+                          href={`https://www.google.com/maps?q=${lat},${lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block rounded-lg overflow-hidden hover:opacity-90 transition-opacity"
+                        >
+                          {/* Mapbox Static Map with fallback */}
+                          <div className="w-full h-[150px] rounded-lg overflow-hidden bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/pin-s+ef4444(${lng},${lat})/${lng},${lat},15/300x150@2x?access_token=${process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}`}
+                              alt="Location"
+                              className="w-full h-full object-cover absolute inset-0"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            <div className="w-full h-full flex items-center justify-center">
+                              <MapPin className="h-10 w-10 text-teal-500 drop-shadow-md" />
+                            </div>
+                          </div>
+                        </a>
+                        <div className="mt-2 flex items-start gap-2">
+                          <MapPin className="h-4 w-4 text-[#00a884] flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            {locationName && (
+                              <p className="text-sm font-medium text-[#111b21]">
+                                {locationName}
+                              </p>
+                            )}
+                            {locationAddress && (
+                              <p className="text-xs text-[#667781]">
+                                {locationAddress}
+                              </p>
+                            )}
+                            <p className="text-xs text-[#00a884] mt-1">
+                              Abrir en Google Maps →
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                    })() : /* Contact message */
+                    message.messageType === 'contacts' ? (() => {
+                      // Try to get contacts from metadata or parse from content
+                      let contacts = message.metadata?.contacts;
+
+                      // Parse from content if not in metadata
+                      if (!contacts || contacts.length === 0) {
+                        // Parse "Name: X, Phone: Y" format from content
+                        const nameMatch = message.content?.match(/Name:\s*([^,\n]+)/i);
+                        const phoneMatch = message.content?.match(/Phone:\s*([^\s,\n]+)/i);
+                        const emailMatch = message.content?.match(/Email:\s*([^\s,\n]+)/i);
+
+                        if (nameMatch || phoneMatch) {
+                          contacts = [{
+                            name: nameMatch ? { formatted_name: nameMatch[1].trim() } : undefined,
+                            phones: phoneMatch ? [{ phone: phoneMatch[1].trim() }] : undefined,
+                            emails: emailMatch ? [{ email: emailMatch[1].trim() }] : undefined,
+                          }];
+                        }
+                      }
+
+                      return contacts && contacts.length > 0 ? (
+                      <div className="mb-2 space-y-2">
+                        {contacts.map((contact, idx) => (
+                          <div key={idx} className="bg-[#f0f2f5] rounded-lg p-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-[#00a884] flex items-center justify-center flex-shrink-0">
+                                <User className="h-5 w-5 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-[#111b21] truncate">
+                                  {contact.name?.formatted_name ||
+                                   `${contact.name?.first_name || ''} ${contact.name?.last_name || ''}`.trim() ||
+                                   'Contact'}
+                                </p>
+                                {contact.org?.company && (
+                                  <p className="text-xs text-[#667781] flex items-center gap-1 truncate">
+                                    <Building className="h-3 w-3" />
+                                    {contact.org.company}
+                                    {contact.org.title && ` · ${contact.org.title}`}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            {(contact.phones?.length || contact.emails?.length) ? (
+                              <div className="mt-2 pt-2 border-t border-[#d1d7db] space-y-1">
+                                {contact.phones?.map((phone, pIdx) => (
+                                  <a
+                                    key={pIdx}
+                                    href={`tel:${phone.phone}`}
+                                    className="flex items-center gap-2 text-xs text-[#00a884] hover:underline"
+                                  >
+                                    <Phone className="h-3 w-3" />
+                                    {phone.phone}
+                                    {phone.type && <span className="text-[#667781]">({phone.type})</span>}
+                                  </a>
+                                ))}
+                                {contact.emails?.map((email, eIdx) => (
+                                  <a
+                                    key={eIdx}
+                                    href={`mailto:${email.email}`}
+                                    className="flex items-center gap-2 text-xs text-[#00a884] hover:underline"
+                                  >
+                                    <Mail className="h-3 w-3" />
+                                    {email.email}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                    })() : /* Template media (video/image from header) */
+                    message.metadata?.header_media_url ? (
                       <div className="mb-2">
                         {message.metadata.header_type === 'VIDEO' ? (
                           <video
@@ -401,21 +574,39 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
                             className="rounded max-w-full h-auto max-h-96"
                           />
                         ) : message.metadata.header_type === 'IMAGE' ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={message.metadata.header_media_url}
-                            alt="Template media"
-                            className="rounded max-w-full h-auto max-h-96"
-                          />
-                        ) : message.metadata.header_type === 'DOCUMENT' ? (
-                          <a
-                            href={message.metadata.header_media_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm underline cursor-pointer hover:opacity-80 text-[#00a884]"
+                          <div
+                            className="relative group cursor-pointer"
+                            onClick={() => setPreviewImage(message.metadata?.header_media_url || null)}
                           >
-                            📎 Download document
-                          </a>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={message.metadata.header_media_url}
+                              alt="Template media"
+                              className="rounded max-w-full h-auto max-h-96"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+                              <Eye className="w-8 h-8 text-white" />
+                            </div>
+                          </div>
+                        ) : message.metadata.header_type === 'DOCUMENT' ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">📎 Document</span>
+                            <button
+                              onClick={() => setPreviewPdf({ url: message.metadata?.header_media_url || '', filename: 'Document' })}
+                              className="p-1.5 rounded hover:bg-black/10 transition-colors"
+                              title="Preview"
+                            >
+                              <Eye className="h-4 w-4 text-[#667781]" />
+                            </button>
+                            <a
+                              href={message.metadata.header_media_url}
+                              download
+                              className="p-1.5 rounded hover:bg-black/10 transition-colors"
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4 text-[#667781]" />
+                            </a>
+                          </div>
                         ) : null}
                       </div>
                     ) : message.hasMedia && message.mediaData?.url ? (
@@ -428,12 +619,20 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
                             className="max-w-[150px] max-h-[150px] h-auto"
                           />
                         ) : message.mediaData.contentType?.startsWith('image/') || message.messageType === 'image' ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={message.mediaData.url}
-                            alt="Media"
-                            className="rounded max-w-full h-auto max-h-96"
-                          />
+                          <div
+                            className="relative group cursor-pointer"
+                            onClick={() => setPreviewImage(message.mediaData?.url || null)}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={message.mediaData.url}
+                              alt="Media"
+                              className="rounded max-w-full h-auto max-h-96"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
+                              <Eye className="w-8 h-8 text-white" />
+                            </div>
+                          </div>
                         ) : message.mediaData.contentType?.startsWith('video/') || message.messageType === 'video' ? (
                           <video
                             src={message.mediaData.url}
@@ -442,15 +641,34 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
                           />
                         ) : message.mediaData.contentType?.startsWith('audio/') || message.messageType === 'audio' ? (
                           <audio src={message.mediaData.url} controls className="w-full" />
+                        ) : message.mediaData.contentType === 'application/pdf' || message.filename?.endsWith('.pdf') || message.mimeType === 'application/pdf' ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">📎 {message.mediaData.filename || message.filename || 'Document.pdf'}</span>
+                            <button
+                              onClick={() => setPreviewPdf({
+                                url: message.mediaData?.url || '',
+                                filename: message.mediaData?.filename || message.filename || 'Document.pdf'
+                              })}
+                              className="p-1.5 rounded hover:bg-black/10 transition-colors"
+                              title="Preview"
+                            >
+                              <Eye className="h-4 w-4 text-[#667781]" />
+                            </button>
+                            <a
+                              href={message.mediaData.url}
+                              download={message.mediaData.filename || message.filename || 'document.pdf'}
+                              className="p-1.5 rounded hover:bg-black/10 transition-colors"
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4 text-[#667781]" />
+                            </a>
+                          </div>
                         ) : (
                           <a
                             href={message.mediaData.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className={cn(
-                              'flex items-center gap-2 text-sm underline cursor-pointer hover:opacity-80',
-                              message.direction === 'outbound' ? 'text-[#00a884]' : 'text-[#00a884]'
-                            )}
+                            className="flex items-center gap-2 text-sm text-[#00a884] hover:underline"
                           >
                             📎 {message.mediaData.filename || message.filename || 'Download file'}
                           </a>
@@ -464,6 +682,8 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
                           caption={message.caption}
                           filename={message.filename}
                           isOutbound={message.direction === 'outbound'}
+                          onImageClick={setPreviewImage}
+                          onPdfPreview={(url, fname) => setPreviewPdf({ url, filename: fname })}
                         />
                       </div>
                     ) : null}
@@ -649,6 +869,64 @@ export function MessageView({ conversationId, phoneNumber, contactName, onTempla
         phoneNumber={phoneNumber}
         onMessageSent={fetchMessages}
       />
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/90 border-none" showCloseButton={false}>
+          <div className="relative flex items-center justify-center min-h-[50vh]">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            {previewImage && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewImage}
+                alt="Preview"
+                className="max-w-full max-h-[90vh] object-contain"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Preview Dialog */}
+      <Dialog open={!!previewPdf} onOpenChange={() => setPreviewPdf(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0" style={{ width: '900px', height: '80vh' }} showCloseButton={false}>
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-3 border-b bg-gray-50">
+              <span className="font-medium text-sm truncate">{previewPdf?.filename}</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewPdf?.url}
+                  download={previewPdf?.filename}
+                  className="p-2 rounded hover:bg-gray-200 transition-colors"
+                  title="Download"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
+                <button
+                  onClick={() => setPreviewPdf(null)}
+                  className="p-2 rounded hover:bg-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-100">
+              {previewPdf && (
+                <iframe
+                  src={previewPdf.url}
+                  className="w-full h-full border-0"
+                  title="PDF Preview"
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
