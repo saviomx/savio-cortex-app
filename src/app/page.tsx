@@ -35,6 +35,7 @@ export default function Home() {
   const [dateFrom, setDateFrom] = useState<string | null>(defaultDates.from);
   const [dateTo, setDateTo] = useState<string | null>(defaultDates.to);
   const [windowStatus, setWindowStatus] = useState<WindowStatus>('all');
+  const [assignedSdrId, setAssignedSdrId] = useState<number | null>(null);
   const leadListRef = useRef<LeadListRef>(null);
 
   const handleCategoryChange = useCallback((category: LeadStatus) => {
@@ -48,6 +49,10 @@ export default function Home() {
 
   const handleWindowStatusChange = useCallback((status: WindowStatus) => {
     setWindowStatus(status);
+  }, []);
+
+  const handleSdrChange = useCallback((sdrId: number | null) => {
+    setAssignedSdrId(sdrId);
   }, []);
 
   const handleSelectLead = useCallback((lead: SelectedLead | null) => {
@@ -81,6 +86,8 @@ export default function Home() {
           initialDateTo={defaultDates.to}
           windowStatus={windowStatus}
           onWindowStatusChange={handleWindowStatusChange}
+          assignedSdrId={assignedSdrId}
+          onSdrChange={handleSdrChange}
           className="w-56 flex-shrink-0 hidden md:flex flex-col"
         />
 
@@ -92,11 +99,13 @@ export default function Home() {
           dateFrom={dateFrom}
           dateTo={dateTo}
           windowStatus={windowStatus}
+          assignedSdrId={assignedSdrId}
           selectedLeadId={selectedLead?.external_id || (selectedLead?.id ? String(selectedLead.id) : null)}
           onSelectLead={handleSelectLead}
           onCategoryChange={handleCategoryChange}
           onDateChange={handleDateChange}
           onWindowStatusChange={handleWindowStatusChange}
+          onSdrChange={handleSdrChange}
           className={`w-full md:w-80 flex-shrink-0 min-h-0 ${selectedLead ? 'hidden md:flex' : 'flex'}`}
         />
 

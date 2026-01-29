@@ -20,6 +20,8 @@ export async function GET(request: Request) {
     const dateFrom = searchParams.get('date_from') || undefined;
     const dateTo = searchParams.get('date_to') || undefined;
     const windowStatus = searchParams.get('window_status') || undefined;
+    const assignedSdrIdParam = searchParams.get('assigned_sdr_id');
+    const assignedSdrId = assignedSdrIdParam ? parseInt(assignedSdrIdParam, 10) : undefined;
 
     // Build search params - use lead_status directly for API filtering
     const searchPayload: {
@@ -28,6 +30,7 @@ export async function GET(request: Request) {
       date_from?: string;
       date_to?: string;
       window_status?: string;
+      assigned_sdr_id?: number;
       cursor?: string;
       limit?: number;
     } = {
@@ -37,6 +40,7 @@ export async function GET(request: Request) {
       date_from: dateFrom,
       date_to: dateTo,
       window_status: windowStatus,
+      assigned_sdr_id: assignedSdrId,
     };
 
     // Only add lead_status if not 'all'

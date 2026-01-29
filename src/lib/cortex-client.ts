@@ -14,6 +14,7 @@ import type {
   StartConversationRequest,
   ContinueConversationRequest,
   SDRAgent,
+  SdrOption,
   Meeting,
   MeetingListResponse,
   HubSpotOwnersResponse,
@@ -140,6 +141,7 @@ class CortexClient {
     date_from?: string;
     date_to?: string;
     window_status?: string;
+    assigned_sdr_id?: number;
     cursor?: string;
     limit?: number;
   }): Promise<ConversationSearchResponse> {
@@ -154,6 +156,7 @@ class CortexClient {
     if (params.date_from) searchParams.set('date_from', params.date_from);
     if (params.date_to) searchParams.set('date_to', params.date_to);
     if (params.window_status) searchParams.set('window_status', params.window_status);
+    if (params.assigned_sdr_id !== undefined) searchParams.set('assigned_sdr_id', String(params.assigned_sdr_id));
     if (params.cursor) searchParams.set('cursor', params.cursor);
     if (params.limit) searchParams.set('limit', String(params.limit));
 
@@ -253,6 +256,10 @@ class CortexClient {
 
   async listSDRAgents(activeOnly = true): Promise<SDRAgent[]> {
     return this.request(`/sdr?active_only=${activeOnly}`);
+  }
+
+  async getSdrOptions(): Promise<SdrOption[]> {
+    return this.request('/sdr/options');
   }
 
   async getSDRAgent(sdrId: number): Promise<SDRAgent> {

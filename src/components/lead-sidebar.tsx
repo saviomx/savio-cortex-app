@@ -1,16 +1,22 @@
 'use client';
 
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { cn } from '@/lib/utils';
-import { Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, X, MessageCircle, Clock } from 'lucide-react';
+import { Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, X, MessageCircle, Clock, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Lead status values matching the API
 export type LeadStatus = 'all' | 'new_leads' | 'conversing' | 'qualified' | 'demo' | 'demo_today' | 'manual_mode';
 
 // Window status for 24h filter
 export type WindowStatus = 'all' | 'open' | 'expired';
+
+interface SdrOption {
+  id: number;
+  name: string;
+}
 
 interface LeadSidebarProps {
   selectedCategory: LeadStatus;
@@ -20,6 +26,8 @@ interface LeadSidebarProps {
   initialDateTo?: string | null;
   windowStatus?: WindowStatus;
   onWindowStatusChange?: (status: WindowStatus) => void;
+  assignedSdrId?: number | null;
+  onSdrChange?: (sdrId: number | null) => void;
   className?: string;
 }
 
@@ -88,11 +96,33 @@ export const LeadSidebar = memo(function LeadSidebar({
   initialDateTo,
   windowStatus = 'all',
   onWindowStatusChange,
+  assignedSdrId,
+  onSdrChange,
   className,
 }: LeadSidebarProps) {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState<string>(initialDateFrom || '');
   const [dateTo, setDateTo] = useState<string>(initialDateTo || '');
+  const [sdrOptions, setSdrOptions] = useState<SdrOption[]>([]);
+  const [loadingSdrs, setLoadingSdrs] = useState(true);
+
+  // Fetch SDR options on mount
+  useEffect(() => {
+    async function fetchSdrOptions() {
+      try {
+        const response = await fetch('/api/sdr/options');
+        if (response.ok) {
+          const data = await response.json();
+          setSdrOptions(data.options || []);
+        }
+      } catch (error) {
+        console.error('Error fetching SDR options:', error);
+      } finally {
+        setLoadingSdrs(false);
+      }
+    }
+    fetchSdrOptions();
+  }, []);
 
   const handleApplyDateFilter = () => {
     onDateChange?.(dateFrom || null, dateTo || null);
@@ -177,6 +207,35 @@ export const LeadSidebar = memo(function LeadSidebar({
           </div>
         )}
       </div>
+
+      {/* Owner Filter */}
+      {onSdrChange && (
+        <div className="border-b border-gray-200 p-3">
+          <div className="mb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+              <User className="w-3 h-3" />
+              Owner
+            </span>
+          </div>
+          <Select
+            value={assignedSdrId?.toString() || 'all'}
+            onValueChange={(value) => onSdrChange(value === 'all' ? null : parseInt(value, 10))}
+            disabled={loadingSdrs}
+          >
+            <SelectTrigger className="w-full h-8 text-sm">
+              <SelectValue placeholder={loadingSdrs ? 'Loading...' : 'All Owners'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Owners</SelectItem>
+              {sdrOptions.map((sdr) => (
+                <SelectItem key={sdr.id} value={sdr.id.toString()}>
+                  {sdr.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Chat Window Filter */}
       {onWindowStatusChange && (

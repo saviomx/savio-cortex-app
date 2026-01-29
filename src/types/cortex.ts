@@ -224,6 +224,12 @@ export interface SDRAgent {
   oauth_tokens: SDROAuthResponse[];
 }
 
+/** Lightweight SDR option for dropdowns (id + name only) */
+export interface SdrOption {
+  id: number;
+  name: string;
+}
+
 // =============================================================================
 // Meeting Types
 // =============================================================================

@@ -720,27 +720,26 @@ export const ChatPanel = memo(function ChatPanel({
               </a>
             )}
 
-            {/* Agent Toggle - simplified on mobile */}
-            <div className="flex items-center gap-1 md:gap-2 bg-gray-100 rounded-lg px-2 md:px-3 py-1.5">
-              <span className="hidden md:inline text-sm font-medium text-gray-700 mr-1">Agent</span>
-              <span className={cn(
-                'hidden md:inline text-xs font-medium w-7',
-                !isAgentActive ? 'text-gray-900' : 'text-gray-400'
+            {/* Agent Toggle - clear on mobile */}
+            <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
+              <span className="text-xs md:text-sm font-medium text-gray-700">Agent</span>
+              <div className={cn(
+                'flex items-center gap-2 px-2 py-1 rounded-md transition-colors',
+                isAgentActive ? 'bg-green-100' : 'bg-gray-200'
               )}>
-                OFF
-              </span>
-              <Switch
-                checked={isAgentActive}
-                onCheckedChange={handleToggleAgent}
-                disabled={toggling}
-                className="data-[state=checked]:bg-green-500"
-              />
-              <span className={cn(
-                'hidden md:inline text-xs font-medium w-7',
-                isAgentActive ? 'text-green-600' : 'text-gray-400'
-              )}>
-                ON
-              </span>
+                <Switch
+                  checked={isAgentActive}
+                  onCheckedChange={handleToggleAgent}
+                  disabled={toggling}
+                  className="data-[state=checked]:bg-green-500"
+                />
+                <span className={cn(
+                  'text-xs font-semibold whitespace-nowrap',
+                  isAgentActive ? 'text-green-700' : 'text-gray-600'
+                )}>
+                  {isAgentActive ? 'ON' : 'OFF'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -2326,15 +2325,31 @@ function CRMTab({
                     </div>
                   </div>
                 </div>
-                <a
-                  href={fullContact?.hubspot_link || crmData.links.contact_link || `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-1/${crmData.contact?.id || fullContact?.contact_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Open in HubSpot
-                </a>
+                {(() => {
+                  // Construct HubSpot link with proper fallback and validation
+                  const contactId = crmData.contact?.id || fullContact?.contact_id;
+                  const hubspotLink =
+                    fullContact?.hubspot_link ||
+                    crmData.links.contact_link ||
+                    (contactId ? `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/contact/${contactId}/` : null);
+
+                  return hubspotLink ? (
+                    <a
+                      href={hubspotLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Open in HubSpot
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-400 bg-gray-50 rounded cursor-not-allowed" title="No HubSpot contact ID available">
+                      <ExternalLink className="w-3 h-3" />
+                      Open in HubSpot
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div className="px-3 py-2 space-y-1.5 bg-gray-50/50">
@@ -2456,15 +2471,28 @@ function CRMTab({
                     </div>
                   </div>
                 </div>
-                <a
-                  href={crmData.links.deal_link || `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/record/0-3/${crmData.deal.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Open in HubSpot
-                </a>
+                {(() => {
+                  // Construct HubSpot deal link with proper validation
+                  const dealLink = crmData.links.deal_link ||
+                    (crmData.deal.id ? `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/deal/${crmData.deal.id}/` : null);
+
+                  return dealLink ? (
+                    <a
+                      href={dealLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 rounded transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Open in HubSpot
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-400 bg-gray-50 rounded cursor-not-allowed" title="No HubSpot deal ID available">
+                      <ExternalLink className="w-3 h-3" />
+                      Open in HubSpot
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div className="p-3 grid grid-cols-2 gap-3 text-xs">

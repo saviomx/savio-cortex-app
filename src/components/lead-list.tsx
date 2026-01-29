@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn, formatNumber } from '@/lib/utils';
 import { formatTimeAgo } from '@/lib/utils/date';
 import { getQualificationInfo, getQualificationClasses } from '@/lib/qualification';
@@ -21,11 +22,17 @@ interface Lead extends ConversationSearchItem {
   last_message_role?: string | null;
 }
 
+interface SdrOption {
+  id: number;
+  name: string;
+}
+
 interface LeadListProps {
   selectedCategory: LeadStatus;
   dateFrom?: string | null;
   dateTo?: string | null;
   windowStatus?: WindowStatus;
+  assignedSdrId?: number | null;
   selectedLeadId: string | null;
   onSelectLead: (lead: Lead | null) => void;
   className?: string;
@@ -33,6 +40,7 @@ interface LeadListProps {
   onCategoryChange?: (category: LeadStatus) => void;
   onDateChange?: (from: string | null, to: string | null) => void;
   onWindowStatusChange?: (status: WindowStatus) => void;
+  onSdrChange?: (sdrId: number | null) => void;
 }
 
 // Category items for mobile filter
@@ -51,7 +59,7 @@ export interface LeadListRef {
 }
 
 export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function LeadList(
-  { selectedCategory, dateFrom, dateTo, windowStatus, selectedLeadId, onSelectLead, className, onCategoryChange, onDateChange, onWindowStatusChange },
+  { selectedCategory, dateFrom, dateTo, windowStatus, assignedSdrId, selectedLeadId, onSelectLead, className, onCategoryChange, onDateChange, onWindowStatusChange, onSdrChange },
   ref
 ) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -67,17 +75,35 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
   const [mobileDateFrom, setMobileDateFrom] = useState<string>(dateFrom || '');
   const [mobileDateTo, setMobileDateTo] = useState<string>(dateTo || '');
   const [mobileFilterSheetOpen, setMobileFilterSheetOpen] = useState(false);
+  const [sdrOptions, setSdrOptions] = useState<SdrOption[]>([]);
+  const [mobileSdrId, setMobileSdrId] = useState<number | null>(assignedSdrId || null);
+
+  // Fetch SDR options on mount
+  useEffect(() => {
+    async function fetchSdrOptions() {
+      try {
+        const response = await fetch('/api/sdr/options');
+        if (response.ok) {
+          const data = await response.json();
+          setSdrOptions(data.options || []);
+        }
+      } catch (error) {
+        console.error('Error fetching SDR options:', error);
+      }
+    }
+    fetchSdrOptions();
+  }, []);
 
   // Store filter params in refs for stable callback
-  const filtersRef = useRef({ selectedCategory, searchQuery, dateFrom, dateTo, windowStatus });
-  filtersRef.current = { selectedCategory, searchQuery, dateFrom, dateTo, windowStatus };
+  const filtersRef = useRef({ selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, assignedSdrId });
+  filtersRef.current = { selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, assignedSdrId };
 
   // Interval ref to avoid recreation
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Stable fetch function that reads from refs
   const fetchLeads = useCallback(async (cursor?: string | null, append = false, isBackgroundRefresh = false) => {
-    const { selectedCategory, searchQuery, dateFrom, dateTo, windowStatus } = filtersRef.current;
+    const { selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, assignedSdrId } = filtersRef.current;
 
     try {
       if (!append && !isBackgroundRefresh) setLoading(true);
@@ -99,6 +125,9 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
       }
       if (windowStatus && windowStatus !== 'all') {
         params.set('window_status', windowStatus);
+      }
+      if (assignedSdrId !== null && assignedSdrId !== undefined) {
+        params.set('assigned_sdr_id', String(assignedSdrId));
       }
       if (cursor) {
         params.set('cursor', cursor);
@@ -169,7 +198,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
   // Fetch when filters change (separate from polling)
   useEffect(() => {
     fetchLeads();
-  }, [selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, fetchLeads]);
+  }, [selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, assignedSdrId, fetchLeads]);
 
   useImperativeHandle(ref, () => ({
     refresh: () => {
@@ -300,13 +329,44 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
                       </div>
                     </div>
                   </div>
+
+                  {/* Owner Filter */}
+                  {onSdrChange && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Owner</h3>
+                      <Select
+                        value={mobileSdrId?.toString() || 'all'}
+                        onValueChange={(value) => setMobileSdrId(value === 'all' ? null : parseInt(value, 10))}
+                      >
+                        <SelectTrigger className="w-full h-10">
+                          <SelectValue placeholder="All Owners" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Owners</SelectItem>
+                          {sdrOptions.map((sdr) => (
+                            <SelectItem key={sdr.id} value={sdr.id.toString()}>
+                              {sdr.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
                 <SheetFooter className="border-t">
                   <div className="flex gap-2 w-full">
-                    <Button variant="outline" className="flex-1" onClick={handleClearMobileDateFilter}>
+                    <Button variant="outline" className="flex-1" onClick={() => {
+                      handleClearMobileDateFilter();
+                      setMobileSdrId(null);
+                      onSdrChange?.(null);
+                    }}>
                       Clear
                     </Button>
-                    <Button className="flex-1" onClick={handleApplyMobileDateFilter}>
+                    <Button className="flex-1" onClick={() => {
+                      handleApplyMobileDateFilter();
+                      onSdrChange?.(mobileSdrId);
+                      setMobileFilterSheetOpen(false);
+                    }}>
                       Apply
                     </Button>
                   </div>
