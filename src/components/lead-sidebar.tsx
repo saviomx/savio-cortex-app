@@ -144,35 +144,6 @@ export const LeadSidebar = memo(function LeadSidebar({
         className
       )}
     >
-      {/* Owner Filter - At Top */}
-      {onSdrChange && (
-        <div className="border-b border-gray-200 p-3">
-          <div className="mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
-              <User className="w-3 h-3" />
-              Owner
-            </span>
-          </div>
-          <Select
-            value={assignedSdrId?.toString() || 'all'}
-            onValueChange={(value) => onSdrChange(value === 'all' ? null : parseInt(value, 10))}
-            disabled={loadingSdrs}
-          >
-            <SelectTrigger className="w-full h-8 text-sm">
-              <SelectValue placeholder={loadingSdrs ? 'Loading...' : 'All Owners'} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Owners</SelectItem>
-              {sdrOptions.map((sdr) => (
-                <SelectItem key={sdr.id} value={sdr.id.toString()}>
-                  {sdr.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
       {/* Date Filter Section */}
       <div className="border-b border-gray-200 p-3">
         <button
@@ -317,6 +288,35 @@ export const LeadSidebar = memo(function LeadSidebar({
           );
         })}
       </nav>
+
+      {/* Owner Filter - Fixed at Bottom */}
+      {onSdrChange && (
+        <div className="border-t border-gray-200 p-3 mt-auto">
+          <div className="mb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+              <User className="w-3 h-3" />
+              Owner
+            </span>
+          </div>
+          <Select
+            value={assignedSdrId?.toString() || 'all'}
+            onValueChange={(value) => onSdrChange(value === 'all' ? null : parseInt(value, 10))}
+            disabled={loadingSdrs}
+          >
+            <SelectTrigger className="w-full h-8 text-sm">
+              <SelectValue placeholder={loadingSdrs ? 'Loading...' : 'All Owners'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Owners</SelectItem>
+              {sdrOptions.map((sdr) => (
+                <SelectItem key={sdr.id} value={sdr.id.toString()}>
+                  {sdr.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   );
 });
