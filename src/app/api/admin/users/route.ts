@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { validateApiAuth, getAuthToken } from '@/lib/auth-api';
 
 const CORTEX_API_URL = process.env.CORTEX_API_URL;
 
+const ADMIN_ONLY_ROLES = ['admin'];
+
 async function getAuthHeaders() {
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get('auth_token')?.value;
+  const authToken = await getAuthToken();
   return {
     'Content-Type': 'application/json',
     ...(authToken && { Authorization: `Bearer ${authToken}` }),
@@ -15,8 +16,12 @@ async function getAuthHeaders() {
 /**
  * GET /api/admin/users
  * List all users
+ * Allowed roles: admin only
  */
 export async function GET() {
+  const auth = await validateApiAuth(ADMIN_ONLY_ROLES);
+  if (auth.error) return auth.error;
+
   try {
     const headers = await getAuthHeaders();
     const response = await fetch(`${CORTEX_API_URL}/auth/users`, { headers });

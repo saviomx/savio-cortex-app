@@ -33,6 +33,7 @@ interface LeadListProps {
   dateTo?: string | null;
   windowStatus?: WindowStatus;
   assignedSdrId?: number | null;
+  filtersReady?: boolean; // Wait for hydration before fetching
   selectedLeadId: string | null;
   onSelectLead: (lead: Lead | null) => void;
   className?: string;
@@ -59,7 +60,7 @@ export interface LeadListRef {
 }
 
 export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function LeadList(
-  { selectedCategory, dateFrom, dateTo, windowStatus, assignedSdrId, selectedLeadId, onSelectLead, className, onCategoryChange, onDateChange, onWindowStatusChange, onSdrChange },
+  { selectedCategory, dateFrom, dateTo, windowStatus, assignedSdrId, filtersReady = true, selectedLeadId, onSelectLead, className, onCategoryChange, onDateChange, onWindowStatusChange, onSdrChange },
   ref
 ) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -185,20 +186,25 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
     fetchLeads();
   }, [fetchLeads]);
 
-  // Setup polling interval once on mount
+  // Setup polling interval (only when filters are ready)
   useEffect(() => {
+    if (!filtersReady) return;
+
     intervalRef.current = setInterval(() => fetchLeads(null, false, true), 10000);
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [fetchLeads]);
+  }, [fetchLeads, filtersReady]);
 
   // Fetch when filters change (separate from polling)
+  // Only fetch when filtersReady is true (hydration complete)
   useEffect(() => {
-    fetchLeads();
-  }, [selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, assignedSdrId, fetchLeads]);
+    if (filtersReady) {
+      fetchLeads();
+    }
+  }, [selectedCategory, searchQuery, dateFrom, dateTo, windowStatus, assignedSdrId, filtersReady, fetchLeads]);
 
   useImperativeHandle(ref, () => ({
     refresh: () => {

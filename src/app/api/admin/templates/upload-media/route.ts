@@ -1,17 +1,24 @@
 import { NextResponse } from 'next/server';
+import { validateApiAuth } from '@/lib/auth-api';
 
 const CORTEX_API_URL = process.env.CORTEX_API_URL;
 const CORTEX_API_KEY = process.env.CORTEX_API_KEY;
 
+const TEMPLATES_ALLOWED_ROLES = ['admin', 'manager'];
+
 /**
  * POST /api/admin/templates/upload-media
  * Upload media for template headers (images, videos, documents)
+ * Allowed roles: admin, manager
  *
  * Supports two methods:
  * 1. URL-based (recommended): Send JSON body with { url: "https://..." }
  * 2. Direct file upload: Send multipart/form-data with file
  */
 export async function POST(request: Request) {
+  const auth = await validateApiAuth(TEMPLATES_ALLOWED_ROLES);
+  if (auth.error) return auth.error;
+
   try {
     const contentType = request.headers.get('content-type') || '';
 

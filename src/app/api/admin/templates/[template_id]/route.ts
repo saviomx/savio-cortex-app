@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
+import { validateApiAuth } from '@/lib/auth-api';
 
 const CORTEX_API_URL = process.env.CORTEX_API_URL;
 const CORTEX_API_KEY = process.env.CORTEX_API_KEY;
+
+const TEMPLATES_ALLOWED_ROLES = ['admin', 'manager'];
 
 function getAuthHeaders() {
   return {
@@ -13,11 +16,15 @@ function getAuthHeaders() {
 /**
  * GET /api/admin/templates/[template_id]
  * Get a specific template
+ * Allowed roles: admin, manager
  */
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ template_id: string }> }
 ) {
+  const auth = await validateApiAuth(TEMPLATES_ALLOWED_ROLES);
+  if (auth.error) return auth.error;
+
   try {
     const { template_id } = await params;
     const headers = getAuthHeaders();
@@ -46,11 +53,15 @@ export async function GET(
 /**
  * DELETE /api/admin/templates/[template_id]
  * Delete a template (locally and from Meta/Kapso)
+ * Allowed roles: admin, manager
  */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ template_id: string }> }
 ) {
+  const auth = await validateApiAuth(TEMPLATES_ALLOWED_ROLES);
+  if (auth.error) return auth.error;
+
   try {
     const { template_id } = await params;
     const headers = getAuthHeaders();

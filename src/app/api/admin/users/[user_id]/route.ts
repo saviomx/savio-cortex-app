@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { validateApiAuth, getAuthToken } from '@/lib/auth-api';
 
 const CORTEX_API_URL = process.env.CORTEX_API_URL;
 
+const ADMIN_ONLY_ROLES = ['admin'];
+
 async function getAuthHeaders() {
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get('auth_token')?.value;
+  const authToken = await getAuthToken();
   return {
     'Content-Type': 'application/json',
     ...(authToken && { Authorization: `Bearer ${authToken}` }),
@@ -16,11 +17,15 @@ async function getAuthHeaders() {
  * PATCH /api/admin/users/[user_id]
  * Update user (activate, deactivate, change role)
  * Body: { action: 'activate' | 'deactivate' | 'role', role?: string }
+ * Allowed roles: admin only
  */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ user_id: string }> }
 ) {
+  const auth = await validateApiAuth(ADMIN_ONLY_ROLES);
+  if (auth.error) return auth.error;
+
   try {
     const { user_id } = await params;
     const body = await request.json();

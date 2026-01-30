@@ -144,7 +144,53 @@ export const LeadSidebar = memo(function LeadSidebar({
         className
       )}
     >
-      {/* Date Filter Section - At Top */}
+      {/* Chat Window Filter - At Top */}
+      {onWindowStatusChange && (
+        <div className="border-b border-gray-200 p-3">
+          <div className="mb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Chat Window</span>
+          </div>
+          <div className="flex rounded-lg bg-gray-100 p-1">
+            <button
+              onClick={() => onWindowStatusChange('all')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'all'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              All
+            </button>
+            <button
+              onClick={() => onWindowStatusChange('open')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'open'
+                  ? 'bg-white text-green-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <MessageCircle className="w-3 h-3" />
+              Open
+            </button>
+            <button
+              onClick={() => onWindowStatusChange('expired')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'expired'
+                  ? 'bg-white text-amber-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <Clock className="w-3 h-3" />
+              Expired
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Date Filter Section */}
       <div className="border-b border-gray-200 p-3">
         <button
           onClick={() => setShowDateFilter(!showDateFilter)}
@@ -208,7 +254,7 @@ export const LeadSidebar = memo(function LeadSidebar({
         )}
       </div>
 
-      {/* Owner Filter */}
+      {/* Owner Filter - Supervision/assignment filter */}
       {onSdrChange && (
         <div className="border-b border-gray-200 p-3">
           <div className="mb-2">
@@ -234,52 +280,6 @@ export const LeadSidebar = memo(function LeadSidebar({
               ))}
             </SelectContent>
           </Select>
-        </div>
-      )}
-
-      {/* Chat Window Filter */}
-      {onWindowStatusChange && (
-        <div className="border-b border-gray-200 p-3">
-          <div className="mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Chat Window</span>
-          </div>
-          <div className="flex rounded-lg bg-gray-100 p-1">
-            <button
-              onClick={() => onWindowStatusChange('all')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
-                windowStatus === 'all'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              All
-            </button>
-            <button
-              onClick={() => onWindowStatusChange('open')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
-                windowStatus === 'open'
-                  ? 'bg-white text-green-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              <MessageCircle className="w-3 h-3" />
-              Open
-            </button>
-            <button
-              onClick={() => onWindowStatusChange('expired')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
-                windowStatus === 'expired'
-                  ? 'bg-white text-amber-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              <Clock className="w-3 h-3" />
-              Expired
-            </button>
-          </div>
         </div>
       )}
 

@@ -56,9 +56,9 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    if (!body.title || !body.due_date) {
+    if (!body.title) {
       return NextResponse.json(
-        { error: 'title and due_date are required' },
+        { error: 'title is required' },
         { status: 400 }
       );
     }

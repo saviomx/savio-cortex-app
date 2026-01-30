@@ -7,6 +7,12 @@ const publicRoutes = ['/login', '/register', '/access-denied'];
 // Allowed roles for accessing the main app
 const ALLOWED_ROLES = ['admin', 'sdr', 'manager'];
 
+// Routes restricted to admin only
+const ADMIN_ONLY_ROUTES = ['/ai-brain'];
+
+// Routes accessible by admin and manager
+const ADMIN_MANAGER_ROUTES = ['/settings'];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -35,9 +41,10 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  const userRole = (userInfo?.role || '').toLowerCase();
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
   const isAuthenticated = !!authToken;
-  const hasAccess = userInfo && ALLOWED_ROLES.includes(userInfo.role || '');
+  const hasAccess = userInfo && ALLOWED_ROLES.includes(userRole);
 
   // Redirect unauthenticated users to login (except for public routes)
   if (!isAuthenticated && !isPublicRoute) {
@@ -63,6 +70,23 @@ export function middleware(request: NextRequest) {
   // Redirect users with access away from access-denied page
   if (isAuthenticated && hasAccess && pathname === '/access-denied') {
     return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // Role-based route restrictions for authenticated users
+  if (isAuthenticated && hasAccess) {
+    // Admin-only routes
+    if (ADMIN_ONLY_ROUTES.some(route => pathname.startsWith(route))) {
+      if (userRole !== 'admin') {
+        return NextResponse.redirect(new URL('/access-denied', request.url));
+      }
+    }
+
+    // Admin and Manager routes (like settings)
+    if (ADMIN_MANAGER_ROUTES.some(route => pathname.startsWith(route))) {
+      if (userRole !== 'admin' && userRole !== 'manager') {
+        return NextResponse.redirect(new URL('/access-denied', request.url));
+      }
+    }
   }
 
   return NextResponse.next();

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { validateApiAuth } from '@/lib/auth-api';
 
 const CORTEX_API_URL = process.env.CORTEX_API_URL;
 const CORTEX_API_KEY = process.env.CORTEX_API_KEY;
+
+// Roles allowed to access templates
+const TEMPLATES_ALLOWED_ROLES = ['admin', 'manager'];
 
 function getAuthHeaders() {
   return {
@@ -13,8 +17,13 @@ function getAuthHeaders() {
 /**
  * GET /api/admin/templates
  * List all WhatsApp templates with optional status filter
+ * Allowed roles: admin, manager
  */
 export async function GET(request: Request) {
+  // Validate authentication and role
+  const auth = await validateApiAuth(TEMPLATES_ALLOWED_ROLES);
+  if (auth.error) return auth.error;
+
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -56,8 +65,13 @@ export async function GET(request: Request) {
 /**
  * POST /api/admin/templates
  * Create a new WhatsApp template
+ * Allowed roles: admin, manager
  */
 export async function POST(request: Request) {
+  // Validate authentication and role
+  const auth = await validateApiAuth(TEMPLATES_ALLOWED_ROLES);
+  if (auth.error) return auth.error;
+
   try {
     const body = await request.json();
     const headers = getAuthHeaders();

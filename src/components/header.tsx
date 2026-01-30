@@ -22,19 +22,19 @@ interface HeaderProps {
 }
 
 const allTabs = [
-  { id: 'inbox' as const, label: 'Inbox', icon: Mail, href: '/', adminOnly: false },
-  { id: 'metrics' as const, label: 'Metrics', icon: BarChart3, href: '/metrics', adminOnly: false },
-  { id: 'ai-agent' as const, label: 'AI Agent', icon: Bot, href: '/ai-agent', adminOnly: false },
-  { id: 'ai-brain' as const, label: 'AI Brain', icon: Brain, href: '/ai-brain', adminOnly: true },
-  { id: 'settings' as const, label: 'Settings', icon: Settings, href: '/settings', adminOnly: true },
+  { id: 'inbox' as const, label: 'Inbox', icon: Mail, href: '/', roles: ['admin', 'manager', 'sdr'] },
+  { id: 'metrics' as const, label: 'Metrics', icon: BarChart3, href: '/metrics', roles: ['admin', 'manager', 'sdr'] },
+  { id: 'ai-agent' as const, label: 'AI Agent', icon: Bot, href: '/ai-agent', roles: ['admin', 'manager', 'sdr'] },
+  { id: 'ai-brain' as const, label: 'AI Brain', icon: Brain, href: '/ai-brain', roles: ['admin'] },
+  { id: 'settings' as const, label: 'Settings', icon: Settings, href: '/settings', roles: ['admin', 'manager'] },
 ];
 
 export function Header({ activeTab = 'inbox', className }: HeaderProps) {
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const userRole = (user?.role || '').toLowerCase();
 
-  // Filter tabs based on admin status
-  const tabs = allTabs.filter(tab => !tab.adminOnly || isAdmin);
+  // Filter tabs based on user role (case-insensitive)
+  const tabs = allTabs.filter(tab => tab.roles.includes(userRole));
 
   return (
     <>

@@ -196,15 +196,34 @@ function SettingsLoadingSkeleton() {
 // Main settings content (uses useSearchParams)
 function SettingsPageContent() {
   const { user, logout } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const userRole = (user?.role || '').toLowerCase();
+  const isAdmin = userRole === 'admin';
+  const isManager = userRole === 'manager';
+  const canAccessTemplates = isAdmin || isManager;
+  const canAccessProfile = isAdmin; // Only admins can access profile and phone numbers
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Get section from URL or default to 'profile'
-  const sectionFromUrl = searchParams.get('section') as SectionType | null;
-  const initialSection = sectionFromUrl && VALID_SECTIONS.includes(sectionFromUrl) ? sectionFromUrl : 'profile';
+  // Sections allowed per role
+  const allowedSections: SectionType[] = isAdmin
+    ? ['profile', 'phone-numbers', 'templates', 'users']
+    : isManager
+      ? ['templates']
+      : [];
 
-  const [activeSection, setActiveSection] = useState<SectionType>(initialSection);
+  // Get section from URL, validate permissions, or use default
+  const sectionFromUrl = searchParams.get('section') as SectionType | null;
+  const defaultSection: SectionType = isManager ? 'templates' : 'profile';
+
+  // Only use URL section if user has permission, otherwise use default
+  const getValidSection = (): SectionType => {
+    if (sectionFromUrl && allowedSections.includes(sectionFromUrl)) {
+      return sectionFromUrl;
+    }
+    return defaultSection;
+  };
+
+  const [activeSection, setActiveSection] = useState<SectionType>(getValidSection());
   const [userFilterTab, setUserFilterTab] = useState<UserFilterTab>('all');
   const [userRoleFilter, setUserRoleFilter] = useState<UserRoleFilter>('all');
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -215,13 +234,20 @@ function SettingsPageContent() {
     router.push(`/settings?section=${section}`, { scroll: false });
   }, [router]);
 
-  // Sync with URL on mount and when URL changes
+  // Sync with URL on mount and when URL changes - validate permissions
   useEffect(() => {
     const section = searchParams.get('section') as SectionType | null;
     if (section && VALID_SECTIONS.includes(section)) {
-      setActiveSection(section);
+      // Only allow if user has permission
+      if (allowedSections.includes(section)) {
+        setActiveSection(section);
+      } else {
+        // Redirect to allowed section
+        setActiveSection(defaultSection);
+        router.replace(`/settings?section=${defaultSection}`, { scroll: false });
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, allowedSections, defaultSection, router]);
 
   // Business Profile state
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
@@ -385,9 +411,9 @@ function SettingsPageContent() {
     }
   }, []);
 
-  // Fetch templates (admin only) - fetches all statuses for client-side filtering
+  // Fetch templates (admin and manager) - fetches all statuses for client-side filtering
   const fetchTemplates = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!canAccessTemplates) return;
     try {
       setLoadingTemplates(true);
       // Fetch all statuses in parallel and combine
@@ -418,7 +444,7 @@ function SettingsPageContent() {
     } finally {
       setLoadingTemplates(false);
     }
-  }, [isAdmin]);
+  }, [canAccessTemplates]);
 
   // Fetch users (admin only)
   const fetchUsers = useCallback(async () => {
@@ -445,13 +471,19 @@ function SettingsPageContent() {
     fetchVerticals();
   }, [fetchProfile, fetchPhoneNumbers, fetchVerticals]);
 
-  // Fetch admin data when user becomes admin
+  // Fetch templates when user has access (admin or manager)
+  useEffect(() => {
+    if (canAccessTemplates) {
+      fetchTemplates();
+    }
+  }, [canAccessTemplates, fetchTemplates]);
+
+  // Fetch users (admin only)
   useEffect(() => {
     if (isAdmin) {
-      fetchTemplates();
       fetchUsers();
     }
-  }, [isAdmin, fetchTemplates, fetchUsers]);
+  }, [isAdmin, fetchUsers]);
 
   // Client-side template filtering with debounced search
   const filteredTemplates = useMemo(() => {
@@ -796,57 +828,61 @@ function SettingsPageContent() {
         {/* Mobile Tabs */}
         <div className="md:hidden border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
           <div className="flex overflow-x-auto px-2 py-2 gap-2 no-scrollbar">
-            <button
-              onClick={() => handleSectionChange('profile')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
-                activeSection === 'profile'
-                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-              )}
-            >
-              <Building2 className="w-4 h-4" />
-              Profile
-            </button>
-            <button
-              onClick={() => handleSectionChange('phone-numbers')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
-                activeSection === 'phone-numbers'
-                  ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-              )}
-            >
-              <Phone className="w-4 h-4" />
-              Phones
-            </button>
-            {isAdmin && (
+            {canAccessProfile && (
               <>
                 <button
-                  onClick={() => handleSectionChange('templates')}
+                  onClick={() => handleSectionChange('profile')}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
-                    activeSection === 'templates'
+                    activeSection === 'profile'
                       ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                       : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                   )}
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  Templates
+                  <Building2 className="w-4 h-4" />
+                  Profile
                 </button>
                 <button
-                  onClick={() => handleSectionChange('users')}
+                  onClick={() => handleSectionChange('phone-numbers')}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
-                    activeSection === 'users'
+                    activeSection === 'phone-numbers'
                       ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                       : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                   )}
                 >
-                  <Users className="w-4 h-4" />
-                  Users
+                  <Phone className="w-4 h-4" />
+                  Phones
                 </button>
               </>
+            )}
+            {canAccessTemplates && (
+              <button
+                onClick={() => handleSectionChange('templates')}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                  activeSection === 'templates'
+                    ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                )}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Templates
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                onClick={() => handleSectionChange('users')}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                  activeSection === 'users'
+                    ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                )}
+              >
+                <Users className="w-4 h-4" />
+                Users
+              </button>
             )}
           </div>
         </div>
@@ -855,32 +891,36 @@ function SettingsPageContent() {
         <div className="hidden md:flex md:flex-col w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4">Settings</h2>
           <nav className="space-y-1 flex-1">
-            <button
-              onClick={() => handleSectionChange('profile')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                activeSection === 'profile'
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-              )}
-            >
-              <Building2 className="w-4 h-4" />
-              Business Profile
-            </button>
-            <button
-              onClick={() => handleSectionChange('phone-numbers')}
-              className={cn(
-                'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                activeSection === 'phone-numbers'
-                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-              )}
-            >
-              <Phone className="w-4 h-4" />
-              Phone Numbers
-            </button>
-            {/* Admin-only sections */}
-            {isAdmin && (
+            {canAccessProfile && (
+              <>
+                <button
+                  onClick={() => handleSectionChange('profile')}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                    activeSection === 'profile'
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  )}
+                >
+                  <Building2 className="w-4 h-4" />
+                  Business Profile
+                </button>
+                <button
+                  onClick={() => handleSectionChange('phone-numbers')}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                    activeSection === 'phone-numbers'
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  )}
+                >
+                  <Phone className="w-4 h-4" />
+                  Phone Numbers
+                </button>
+              </>
+            )}
+            {/* Administration sections */}
+            {canAccessTemplates && (
               <>
                 <div className="my-4 border-t border-gray-200 dark:border-gray-700" />
                 <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 px-3">
@@ -898,18 +938,20 @@ function SettingsPageContent() {
                   <MessageSquare className="w-4 h-4" />
                   WhatsApp Templates
                 </button>
-                <button
-                  onClick={() => handleSectionChange('users')}
-                  className={cn(
-                    'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                    activeSection === 'users'
-                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
-                  )}
-                >
-                  <Users className="w-4 h-4" />
-                  User Management
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleSectionChange('users')}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                      activeSection === 'users'
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    )}
+                  >
+                    <Users className="w-4 h-4" />
+                    User Management
+                  </button>
+                )}
               </>
             )}
           </nav>
@@ -1228,8 +1270,8 @@ function SettingsPageContent() {
                 </div>
               )}
 
-              {/* WhatsApp Templates Section (Admin only) - Redesigned */}
-              {activeSection === 'templates' && isAdmin && (
+              {/* WhatsApp Templates Section (Admin and Manager) - Redesigned */}
+              {activeSection === 'templates' && canAccessTemplates && (
                 <div className="space-y-4">
                   {/* Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

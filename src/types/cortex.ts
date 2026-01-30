@@ -748,7 +748,7 @@ export interface TasksResponse {
  */
 export interface CreateTaskRequest {
   title: string;
-  due_date: string;
+  due_date?: string;
   task_type?: 'TODO' | 'CALL' | 'EMAIL';
   notes?: string | null;
 }
