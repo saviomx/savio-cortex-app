@@ -198,7 +198,7 @@ export const ConversationList = forwardRef<ConversationListRef, Props>(
               key={conversation.id}
               onClick={() => onSelectConversation(conversation)}
               className={cn(
-                'w-full p-3 pr-4 border-b border-[#e9edef] hover:bg-[#f0f2f5] text-left transition-colors relative overflow-hidden',
+                'w-full p-3 pr-4 border-b border-[#e9edef] hover:bg-[#f0f2f5] text-left transition-colors relative overflow-hidden cursor-pointer',
                 selectedConversationId === conversation.id && 'bg-[#f0f2f5]'
               )}
             >

@@ -412,7 +412,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
               <button
                 onClick={() => onWindowStatusChange('all')}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer',
                   windowStatus === 'all'
                     ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
@@ -423,7 +423,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
               <button
                 onClick={() => onWindowStatusChange('open')}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer',
                   windowStatus === 'open'
                     ? 'bg-white text-green-700 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
@@ -435,7 +435,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
               <button
                 onClick={() => onWindowStatusChange('expired')}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer',
                   windowStatus === 'expired'
                     ? 'bg-white text-amber-700 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
@@ -453,7 +453,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
       {newLeadsCount > 0 && (
         <button
           onClick={loadNewConversations}
-          className="w-full px-4 py-2 bg-blue-50 hover:bg-blue-100 border-b border-blue-100 text-sm text-blue-600 font-medium transition-colors flex items-center justify-center gap-2"
+          className="w-full px-4 py-2 bg-blue-50 hover:bg-blue-100 border-b border-blue-100 text-sm text-blue-600 font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
         >
           <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
           {newLeadsCount} new conversation{newLeadsCount > 1 ? 's' : ''} - tap to load
@@ -491,7 +491,7 @@ export const LeadList = memo(forwardRef<LeadListRef, LeadListProps>(function Lea
                     }
                   }}
                   className={cn(
-                    'w-full p-4 text-left transition-colors hover:bg-gray-50',
+                    'w-full p-4 text-left transition-colors hover:bg-gray-50 cursor-pointer',
                     isSelected && 'bg-blue-50 hover:bg-blue-50'
                   )}
                 >

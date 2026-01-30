@@ -2,7 +2,8 @@
 
 import { useState, useEffect, memo } from 'react';
 import { cn } from '@/lib/utils';
-import { Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, X, MessageCircle, Clock, User } from 'lucide-react';
+import { Inbox, UserPlus, MessageSquare, CheckCircle, Calendar, CalendarClock, AlertCircle, CalendarDays, X, MessageCircle, Clock, User, HelpCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -149,7 +150,7 @@ export const LeadSidebar = memo(function LeadSidebar({
         <button
           onClick={() => setShowDateFilter(!showDateFilter)}
           className={cn(
-            'w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md transition-colors',
+            'w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md transition-colors cursor-pointer',
             'hover:bg-gray-50',
             hasDateFilter && 'bg-blue-50 text-blue-700'
           )}
@@ -212,13 +213,25 @@ export const LeadSidebar = memo(function LeadSidebar({
       {onWindowStatusChange && (
         <div className="border-b border-gray-200 p-3">
           <div className="mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Chat Window</span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide cursor-help inline-flex items-center gap-1">
+                    Chat Window
+                    <HelpCircle className="w-3 h-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-[220px]">
+                  <p className="text-xs">WhatsApp only allows free messages within 24 hours of the customer&apos;s last reply. After that, you need to use a template.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <div className="flex rounded-lg bg-gray-100 p-1">
             <button
               onClick={() => onWindowStatusChange('all')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer',
                 windowStatus === 'all'
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
@@ -229,7 +242,7 @@ export const LeadSidebar = memo(function LeadSidebar({
             <button
               onClick={() => onWindowStatusChange('open')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer',
                 windowStatus === 'open'
                   ? 'bg-white text-green-700 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
@@ -241,7 +254,7 @@ export const LeadSidebar = memo(function LeadSidebar({
             <button
               onClick={() => onWindowStatusChange('expired')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer',
                 windowStatus === 'expired'
                   ? 'bg-white text-amber-700 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
@@ -265,7 +278,7 @@ export const LeadSidebar = memo(function LeadSidebar({
               key={category.id}
               onClick={() => onCategoryChange(category.id)}
               className={cn(
-                'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
+                'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer',
                 'hover:bg-gray-50',
                 isSelected && 'bg-gray-100',
                 category.color

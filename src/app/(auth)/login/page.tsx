@@ -47,7 +47,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div
+      className="min-h-screen flex items-center justify-center px-4"
+      style={{
+        background: 'linear-gradient(180deg, #ffffff 0%, #e8f0f8 50%, #c7d9ed 100%)'
+      }}
+    >
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-lg p-8">
           {/* Logo */}
@@ -106,7 +111,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full"
+              className="w-full bg-blue-600 hover:bg-blue-700"
               disabled={isLoading}
             >
               {isLoading ? (

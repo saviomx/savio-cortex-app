@@ -775,7 +775,7 @@ export const ChatPanel = memo(function ChatPanel({
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors whitespace-nowrap',
+                'flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                 'border-b-2 -mb-px',
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600'
@@ -800,7 +800,7 @@ export const ChatPanel = memo(function ChatPanel({
           <>
             {/* Debug Toggle - Admin only */}
             {isAdmin && (
-              <div className="flex-shrink-0 flex items-center justify-end px-4 py-2 border-b border-gray-100">
+              <div className="flex-shrink-0 flex items-center justify-end px-4 py-2 border-b border-gray-100 bg-white shadow-sm relative z-10">
                 <button
                   onClick={() => setDebugMode(!debugMode)}
                   className={cn(
@@ -817,14 +817,55 @@ export const ChatPanel = memo(function ChatPanel({
             )}
 
             {/* Messages */}
-            <ScrollArea className="flex-1 min-h-0 p-4">
+            <ScrollArea
+              className="flex-1 min-h-0"
+              style={{
+                backgroundImage: 'linear-gradient(rgba(255,255,255,0.85), rgba(255,255,255,0.85)), url(/chat-pattern.png)',
+                backgroundRepeat: 'repeat',
+                backgroundSize: 'auto, 400px'
+              }}
+            >
+              <div className="p-4">
               {loading && !conversation ? (
                 <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className={cn('flex', i % 2 === 0 ? 'justify-start' : 'justify-end')}>
-                      <Skeleton className="h-16 w-3/4 rounded-lg" />
+                  {/* Lead message skeleton */}
+                  <div className="flex items-end gap-2 justify-start">
+                    <div className="w-8 h-8 rounded-full bg-white shadow-md border border-gray-200 flex-shrink-0 animate-pulse" />
+                    <div className="bg-white shadow-md border border-gray-100 rounded-2xl rounded-bl-md px-4 py-3 max-w-[65%]">
+                      <div className="h-3 bg-gray-200 rounded-full w-32 mb-2 animate-pulse" />
+                      <div className="h-3 bg-gray-200 rounded-full w-20 animate-pulse" />
                     </div>
-                  ))}
+                  </div>
+                  {/* Agent message skeleton */}
+                  <div className="flex items-end justify-end">
+                    <div className="bg-blue-600 rounded-2xl rounded-br-md px-4 py-3 max-w-[60%]">
+                      <div className="h-3 bg-blue-400 rounded-full w-44 mb-2 animate-pulse" />
+                      <div className="h-3 bg-blue-400 rounded-full w-28 animate-pulse" />
+                    </div>
+                  </div>
+                  {/* Lead message skeleton */}
+                  <div className="flex items-end gap-2 justify-start">
+                    <div className="w-8 h-8 rounded-full bg-white shadow-md border border-gray-200 flex-shrink-0 animate-pulse" />
+                    <div className="bg-white shadow-md border border-gray-100 rounded-2xl rounded-bl-md px-4 py-3 max-w-[50%]">
+                      <div className="h-3 bg-gray-200 rounded-full w-24 animate-pulse" />
+                    </div>
+                  </div>
+                  {/* Agent message skeleton */}
+                  <div className="flex items-end justify-end">
+                    <div className="bg-blue-600 rounded-2xl rounded-br-md px-4 py-3 max-w-[70%]">
+                      <div className="h-3 bg-blue-400 rounded-full w-52 mb-2 animate-pulse" />
+                      <div className="h-3 bg-blue-400 rounded-full w-40 mb-2 animate-pulse" />
+                      <div className="h-3 bg-blue-400 rounded-full w-16 animate-pulse" />
+                    </div>
+                  </div>
+                  {/* Lead message skeleton */}
+                  <div className="flex items-end gap-2 justify-start">
+                    <div className="w-8 h-8 rounded-full bg-white shadow-md border border-gray-200 flex-shrink-0 animate-pulse" />
+                    <div className="bg-white shadow-md border border-gray-100 rounded-2xl rounded-bl-md px-4 py-3 max-w-[55%]">
+                      <div className="h-3 bg-gray-200 rounded-full w-36 mb-2 animate-pulse" />
+                      <div className="h-3 bg-gray-200 rounded-full w-24 animate-pulse" />
+                    </div>
+                  </div>
                 </div>
               ) : conversation?.conversation?.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
@@ -842,7 +883,7 @@ export const ChatPanel = memo(function ChatPanel({
                         {/* Date Divider */}
                         {showDivider && dividerText && (
                           <div className="flex justify-center my-4">
-                            <span className="bg-white text-gray-500 text-xs px-3 py-1 rounded-lg shadow-sm border border-gray-200">
+                            <span className="bg-white text-gray-600 text-xs font-medium px-3 py-1.5 rounded-full shadow-md border border-gray-200">
                               {dividerText}
                             </span>
                           </div>
@@ -855,6 +896,7 @@ export const ChatPanel = memo(function ChatPanel({
                   <div ref={scrollRef} />
                 </div>
               )}
+              </div>
             </ScrollArea>
 
             {/* Message Input or Window Expired Banner */}
@@ -1155,7 +1197,7 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
       <div className={cn('flex items-end gap-2 max-w-[80%]', isAssistant && 'flex-row-reverse')}>
         {/* Avatar for user (lead) messages */}
         {!isAssistant && (
-          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center flex-shrink-0 border border-gray-200">
             <User className="w-4 h-4 text-gray-600" />
           </div>
         )}
@@ -1164,7 +1206,7 @@ function MessageBubble({ message, showDebug }: { message: Message; showDebug?: b
             'rounded-2xl overflow-hidden',
             isAssistant
               ? 'bg-blue-600 text-white rounded-br-md'
-              : 'bg-gray-100 text-gray-900 rounded-bl-md',
+              : 'bg-white text-gray-900 rounded-bl-md shadow-md border border-gray-100',
             (hasMedia || locationData || contactsData) ? 'p-1 w-fit' : 'px-4 py-2.5'
           )}
         >

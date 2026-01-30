@@ -833,7 +833,7 @@ function SettingsPageContent() {
                 <button
                   onClick={() => handleSectionChange('profile')}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer',
                     activeSection === 'profile'
                       ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                       : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
@@ -845,7 +845,7 @@ function SettingsPageContent() {
                 <button
                   onClick={() => handleSectionChange('phone-numbers')}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                    'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer',
                     activeSection === 'phone-numbers'
                       ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                       : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
@@ -860,7 +860,7 @@ function SettingsPageContent() {
               <button
                 onClick={() => handleSectionChange('templates')}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer',
                   activeSection === 'templates'
                     ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                     : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
@@ -874,7 +874,7 @@ function SettingsPageContent() {
               <button
                 onClick={() => handleSectionChange('users')}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
+                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer',
                   activeSection === 'users'
                     ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                     : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
@@ -1340,7 +1340,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setTemplateStatusTab('ALL')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         templateStatusTab === 'ALL'
                           ? 'bg-gray-900 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1352,7 +1352,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setTemplateStatusTab('APPROVED')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         templateStatusTab === 'APPROVED'
                           ? 'bg-green-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1364,7 +1364,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setTemplateStatusTab('PENDING')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         templateStatusTab === 'PENDING'
                           ? 'bg-yellow-500 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1376,7 +1376,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setTemplateStatusTab('LOCAL_ONLY')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         templateStatusTab === 'LOCAL_ONLY'
                           ? 'bg-red-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1726,7 +1726,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setUserRoleFilter('all')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         userRoleFilter === 'all'
                           ? 'bg-gray-900 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1738,7 +1738,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setUserRoleFilter('admin')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         userRoleFilter === 'admin'
                           ? 'bg-purple-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1750,7 +1750,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setUserRoleFilter('manager')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         userRoleFilter === 'manager'
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1762,7 +1762,7 @@ function SettingsPageContent() {
                     <button
                       onClick={() => setUserRoleFilter('sdr')}
                       className={cn(
-                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                        'inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap cursor-pointer',
                         userRoleFilter === 'sdr'
                           ? 'bg-gray-700 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
