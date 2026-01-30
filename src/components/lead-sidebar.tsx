@@ -144,49 +144,32 @@ export const LeadSidebar = memo(function LeadSidebar({
         className
       )}
     >
-      {/* Chat Window Filter - At Top */}
-      {onWindowStatusChange && (
+      {/* Owner Filter - At Top */}
+      {onSdrChange && (
         <div className="border-b border-gray-200 p-3">
           <div className="mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Chat Window</span>
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+              <User className="w-3 h-3" />
+              Owner
+            </span>
           </div>
-          <div className="flex rounded-lg bg-gray-100 p-1">
-            <button
-              onClick={() => onWindowStatusChange('all')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
-                windowStatus === 'all'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              All
-            </button>
-            <button
-              onClick={() => onWindowStatusChange('open')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
-                windowStatus === 'open'
-                  ? 'bg-white text-green-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              <MessageCircle className="w-3 h-3" />
-              Open
-            </button>
-            <button
-              onClick={() => onWindowStatusChange('expired')}
-              className={cn(
-                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
-                windowStatus === 'expired'
-                  ? 'bg-white text-amber-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              )}
-            >
-              <Clock className="w-3 h-3" />
-              Expired
-            </button>
-          </div>
+          <Select
+            value={assignedSdrId?.toString() || 'all'}
+            onValueChange={(value) => onSdrChange(value === 'all' ? null : parseInt(value, 10))}
+            disabled={loadingSdrs}
+          >
+            <SelectTrigger className="w-full h-8 text-sm">
+              <SelectValue placeholder={loadingSdrs ? 'Loading...' : 'All Owners'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Owners</SelectItem>
+              {sdrOptions.map((sdr) => (
+                <SelectItem key={sdr.id} value={sdr.id.toString()}>
+                  {sdr.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 
@@ -254,32 +237,49 @@ export const LeadSidebar = memo(function LeadSidebar({
         )}
       </div>
 
-      {/* Owner Filter - Supervision/assignment filter */}
-      {onSdrChange && (
+      {/* Chat Window Filter */}
+      {onWindowStatusChange && (
         <div className="border-b border-gray-200 p-3">
           <div className="mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
-              <User className="w-3 h-3" />
-              Owner
-            </span>
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Chat Window</span>
           </div>
-          <Select
-            value={assignedSdrId?.toString() || 'all'}
-            onValueChange={(value) => onSdrChange(value === 'all' ? null : parseInt(value, 10))}
-            disabled={loadingSdrs}
-          >
-            <SelectTrigger className="w-full h-8 text-sm">
-              <SelectValue placeholder={loadingSdrs ? 'Loading...' : 'All Owners'} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Owners</SelectItem>
-              {sdrOptions.map((sdr) => (
-                <SelectItem key={sdr.id} value={sdr.id.toString()}>
-                  {sdr.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex rounded-lg bg-gray-100 p-1">
+            <button
+              onClick={() => onWindowStatusChange('all')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'all'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              All
+            </button>
+            <button
+              onClick={() => onWindowStatusChange('open')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'open'
+                  ? 'bg-white text-green-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <MessageCircle className="w-3 h-3" />
+              Open
+            </button>
+            <button
+              onClick={() => onWindowStatusChange('expired')}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors',
+                windowStatus === 'expired'
+                  ? 'bg-white text-amber-700 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              )}
+            >
+              <Clock className="w-3 h-3" />
+              Expired
+            </button>
+          </div>
         </div>
       )}
 
